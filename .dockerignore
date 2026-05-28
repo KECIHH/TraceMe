@@ -1,0 +1,11 @@
+node_modules
+.next
+.env
+.env.local
+coverage
+playwright-report
+test-results
+storage/uploads/*
+storage/backups/*
+*.sqlite
+*.db
