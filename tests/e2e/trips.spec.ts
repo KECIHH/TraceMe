@@ -171,3 +171,145 @@ test("user can manage destinations, places, notes, and checklist", async ({
     page.getByRole("heading", { exact: true, name: "手机" }),
   ).toBeVisible();
 });
+
+test("user can manage itinerary days, items, sorting, and today mode", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const title = `E2E 行程日历 ${suffix}`;
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const startDate = toDateInput(today);
+  const endDate = toDateInput(tomorrow);
+
+  await login(page);
+
+  await page.goto("/trips/new");
+  await page.getByLabel("旅行名称 *").fill(title);
+  await page.getByLabel("状态").selectOption("PLANNING");
+  await page.getByLabel("出发日期").fill(startDate);
+  await page.getByLabel("返回日期").fill(endDate);
+  await page.getByLabel("主要目的地").fill("杭州");
+  await page.getByRole("button", { name: "创建旅行" }).click();
+  await expect(page).toHaveURL(/\/trips\/(?!new$)[^/]+$/);
+
+  const tripUrl = page.url();
+  await page.goto(`${tripUrl}/itinerary`);
+  await page.getByTestId("generate-itinerary-days").click();
+  await expect(page.getByTestId("itinerary-day-card")).toHaveCount(2);
+
+  const firstDay = page.getByTestId("itinerary-day-card").first();
+  await firstDay.locator("summary", { hasText: "添加行程项" }).click();
+  await fillItineraryItem(firstDay, {
+    title: "时间错误行程",
+    type: "ATTRACTION",
+    startTime: "10:00",
+    endTime: "09:00",
+    cost: "20",
+  });
+  await firstDay.getByRole("button", { name: "添加行程项" }).click();
+  await expect(page.getByText("结束时间必须晚于开始时间。")).toBeVisible();
+
+  const firstDayAfterValidation = page.getByTestId("itinerary-day-card").first();
+  await firstDayAfterValidation
+    .locator("summary", { hasText: "添加行程项" })
+    .click();
+  await fillItineraryItem(firstDayAfterValidation, {
+    title: "西湖晨走",
+    type: "ATTRACTION",
+    startTime: "09:00",
+    endTime: "10:00",
+    cost: "20",
+  });
+  await firstDayAfterValidation.getByRole("button", { name: "添加行程项" }).click();
+  await expect(page.getByRole("heading", { name: "西湖晨走" })).toBeVisible();
+
+  const firstDayAfterCreate = page.getByTestId("itinerary-day-card").first();
+  await firstDayAfterCreate
+    .locator("summary", { hasText: "添加行程项" })
+    .click();
+  await fillItineraryItem(firstDayAfterCreate, {
+    title: "湖边午餐",
+    type: "DINING",
+    startTime: "09:30",
+    endTime: "10:30",
+    cost: "80",
+  });
+  await firstDayAfterCreate.getByRole("button", { name: "添加行程项" }).click();
+  await expect(page.getByText("西湖晨走 与 湖边午餐 时间重叠")).toBeVisible();
+
+  const firstItem = page.getByTestId("itinerary-item-card").filter({
+    has: page.getByRole("heading", { name: "西湖晨走" }),
+  });
+  await firstItem.getByText("编辑行程项").click();
+  await firstItem.locator('input[name="title"]').fill("西湖晨走已编辑");
+  await firstItem.locator('input[name="startTime"]').fill("11:00");
+  await firstItem.locator('input[name="endTime"]').fill("12:00");
+  await firstItem.getByRole("button", { name: "保存行程项" }).click();
+  await expect(
+    page.getByRole("heading", { name: "西湖晨走已编辑" }),
+  ).toBeVisible();
+
+  const editedItem = page.getByTestId("itinerary-item-card").filter({
+    has: page.getByRole("heading", { name: "西湖晨走已编辑" }),
+  });
+  await editedItem.getByRole("button", { name: "下移" }).click();
+  await page
+    .getByTestId("itinerary-item-card")
+    .filter({ has: page.getByRole("heading", { name: "西湖晨走已编辑" }) })
+    .getByRole("button", { name: "上移" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "西湖晨走已编辑" }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "按开始时间排序" }).first().click();
+  await expect(page.getByText("已按开始时间排序。")).toBeVisible();
+
+  await page
+    .getByTestId("itinerary-item-card")
+    .filter({ has: page.getByRole("heading", { name: "湖边午餐" }) })
+    .getByRole("button", { name: "标记完成" })
+    .click();
+  await expect(page.getByText("已完成").first()).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${tripUrl}/today`);
+  await expect(page.getByRole("heading", { name: "今日模式" })).toBeVisible();
+  await expect(page.getByText("下一项")).toBeVisible();
+  await expect(page.getByText("今日全部行程")).toBeVisible();
+  await expect(page.getByText("酒店/住宿信息")).toBeVisible();
+  await expect(page.getByText("文件票据/准备清单")).toBeVisible();
+});
+
+async function fillItineraryItem(
+  container: import("@playwright/test").Locator,
+  item: {
+    cost: string;
+    endTime: string;
+    startTime: string;
+    title: string;
+    type: string;
+  },
+) {
+  const form = container
+    .locator("details", { hasText: "添加行程项" })
+    .locator("form")
+    .last();
+
+  await form.locator('input[name="title"]').fill(item.title);
+  await form.locator('select[name="type"]').selectOption(item.type);
+  await form.locator('input[name="startTime"]').fill(item.startTime);
+  await form.locator('input[name="endTime"]').fill(item.endTime);
+  await form.locator('input[name="costEstimate"]').fill(item.cost);
+  await form.locator('select[name="priority"]').selectOption("HIGH");
+}
+
+function toDateInput(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}

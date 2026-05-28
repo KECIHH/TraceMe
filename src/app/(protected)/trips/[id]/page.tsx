@@ -30,8 +30,10 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
         select: {
           checklistItems: true,
           destinations: true,
+          itineraryDays: true,
           notes: true,
           places: true,
+          routePlans: true,
         },
       },
     },
@@ -127,7 +129,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             </p>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
           <ModuleLink
             count={trip._count.destinations}
             href={`/trips/${trip.id}/destinations`}
@@ -139,6 +141,21 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             label="地点库"
           />
           <ModuleLink
+            count={trip._count.itineraryDays}
+            href={`/trips/${trip.id}/itinerary`}
+            label="行程日历"
+          />
+          <ModuleLink
+            count={trip._count.itineraryDays}
+            href={`/trips/${trip.id}/today`}
+            label="今日模式"
+          />
+          <ModuleLink
+            count={trip._count.routePlans}
+            href={`/trips/${trip.id}/routes`}
+            label="交通方案"
+          />
+          <ModuleLink
             count={trip._count.notes}
             href={`/trips/${trip.id}/notes`}
             label="攻略笔记"
@@ -148,9 +165,6 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             href={`/trips/${trip.id}/checklist`}
             label="准备清单"
           />
-          <div className="rounded-md border border-[#e0d9cc] bg-[#fbfaf7] px-4 py-3 text-sm font-medium text-[#7a858c]">
-            行程日历 · 后续阶段
-          </div>
         </div>
       </div>
     </section>

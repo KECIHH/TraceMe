@@ -52,13 +52,13 @@ enum BookingStatus {
 }
 
 enum ItineraryItemType {
-  PLACE
-  MEAL
+  ATTRACTION
+  DINING
   TRANSPORT
-  CHECK_IN
-  ACTIVITY
+  LODGING
+  SHOPPING
   REST
-  OTHER
+  CUSTOM
 }
 
 enum TransportMode {
@@ -67,12 +67,20 @@ enum TransportMode {
   TAXI
   RIDESHARE
   BUS
+  COACH
   METRO
   TRAIN
   FLIGHT
   FERRY
   CAR
   OTHER
+}
+
+enum TransportOptionStatus {
+  CANDIDATE
+  SELECTED
+  BOOKED
+  CANCELLED
 }
 
 enum ChecklistStatus {
@@ -224,7 +232,7 @@ model ItineraryItem {
   dayId           String
   placeId         String?
   title           String
-  type            ItineraryItemType   @default(OTHER)
+  type            ItineraryItemType   @default(CUSTOM)
   startTime       DateTime?
   endTime         DateTime?
   durationMin     Int?
@@ -249,6 +257,7 @@ model ItineraryItem {
 model TransportOption {
   id                   String        @id @default(cuid())
   tripId               String
+  routePlanId          String?
   fromName             String
   toName               String
   mode                 TransportMode @default(OTHER)
@@ -265,14 +274,16 @@ model TransportOption {
   luggageFriendlyScore Int?
   flexibilityScore     Int?
   bookingUrl           String?
-  status               BookingStatus @default(TODO)
+  status               TransportOptionStatus @default(CANDIDATE)
   notes                String?
   trip                 Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  routePlan            RoutePlan?    @relation(fields: [routePlanId], references: [id], onDelete: Cascade)
   selectedByRoutes     RoutePlan[]   @relation("SelectedTransportOption")
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
   @@index([tripId])
+  @@index([routePlanId])
 }
 
 model RoutePlan {
@@ -287,6 +298,7 @@ model RoutePlan {
   resultJson       Json?
   notes            String?
   trip             Trip             @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  transportOptions TransportOption[]
   selectedOption   TransportOption? @relation("SelectedTransportOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt

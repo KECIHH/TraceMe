@@ -41,7 +41,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = checkLoginRateLimit(getClientKey(request, username));
+  const rateLimit = shouldApplyLoginRateLimit()
+    ? checkLoginRateLimit(getClientKey(request, username))
+    : { allowed: true, resetAt: Date.now() };
 
   if (!rateLimit.allowed) {
     return NextResponse.json(
@@ -70,4 +72,8 @@ export async function POST(request: Request) {
       role: user.role,
     },
   });
+}
+
+function shouldApplyLoginRateLimit() {
+  return process.env.E2E_BYPASS_LOGIN_RATE_LIMIT !== "true";
 }

@@ -4,6 +4,9 @@ const moduleLinks = [
   { href: "", label: "概览" },
   { href: "destinations", label: "目的地" },
   { href: "places", label: "地点库" },
+  { href: "itinerary", label: "行程日历" },
+  { href: "today", label: "今日模式" },
+  { href: "routes", label: "交通方案" },
   { href: "notes", label: "笔记" },
   { href: "checklist", label: "准备清单" },
 ];
