@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TraceMe",
+  title: "TraceMe 迹遇",
   description: "个人自用旅行规划网站",
 };
 
@@ -13,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="flex min-h-screen flex-col">{children}</body>
     </html>
   );
 }

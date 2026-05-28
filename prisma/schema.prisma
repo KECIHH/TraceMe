@@ -4,14 +4,379 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+}
+
+enum TripStatus {
+  DRAFT
+  PLANNING
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum PlaceType {
+  ATTRACTION
+  RESTAURANT
+  HOTEL
+  TRANSPORT
+  SHOPPING
+  ACTIVITY
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum BookingStatus {
+  NOT_REQUIRED
+  TODO
+  BOOKED
+  CANCELLED
+}
+
+enum ItineraryItemType {
+  PLACE
+  MEAL
+  TRANSPORT
+  CHECK_IN
+  ACTIVITY
+  REST
+  OTHER
+}
+
+enum TransportMode {
+  WALK
+  BIKE
+  TAXI
+  RIDESHARE
+  BUS
+  METRO
+  TRAIN
+  FLIGHT
+  FERRY
+  CAR
+  OTHER
+}
+
+enum ChecklistStatus {
+  TODO
+  DONE
+  SKIPPED
+}
+
+enum DocumentType {
+  PASSPORT
+  VISA
+  TICKET
+  BOOKING
+  INSURANCE
+  RECEIPT
+  OTHER
+}
+
+enum ItineraryItemStatus {
+  PLANNED
+  DONE
+  SKIPPED
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
+  id           String    @id @default(cuid())
+  username     String    @unique
   passwordHash String
   displayName  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         UserRole  @default(ADMIN)
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Session {
+  id               String   @id @default(cuid())
+  userId           String
+  sessionTokenHash String   @unique
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Trip {
+  id              String            @id @default(cuid())
+  title           String
+  description     String?
+  status          TripStatus        @default(DRAFT)
+  startDate       DateTime?
+  endDate         DateTime?
+  homeCity        String?
+  mainDestination String?
+  baseCurrency    String            @default("CNY")
+  budgetAmount    Decimal?
+  coverImage      String?
+  destinations    Destination[]
+  places          Place[]
+  itineraryDays   ItineraryDay[]
+  itineraryItems  ItineraryItem[]
+  transports      TransportOption[]
+  routePlans      RoutePlan[]
+  checklistItems  ChecklistItem[]
+  expenses        Expense[]
+  documents       Document[]
+  notes           Note[]
+  aiConversations AiConversation[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model Destination {
+  id            String    @id @default(cuid())
+  tripId        String
+  name          String
+  country       String?
+  region        String?
+  timezone      String?
+  arrivalDate   DateTime?
+  departureDate DateTime?
+  latitude      Float?
+  longitude     Float?
+  notes         String?
+  trip          Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  places        Place[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tripId])
+}
+
+model Place {
+  id                   String          @id @default(cuid())
+  tripId               String
+  destinationId        String?
+  name                 String
+  type                 PlaceType       @default(OTHER)
+  address              String?
+  latitude             Float?
+  longitude            Float?
+  phone                String?
+  website              String?
+  sourceUrl            String?
+  sourceName           String?
+  lastCheckedAt        DateTime?
+  openingHours         Json?
+  priceLevel           Int?
+  estimatedCost        Decimal?
+  estimatedDurationMin Int?
+  ratingPersonal       Int?
+  priority             Priority        @default(MEDIUM)
+  tags                 Json?
+  notes                String?
+  trip                 Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  destination          Destination?    @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  itineraryItems       ItineraryItem[]
+  expenses             Expense[]
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  @@index([tripId])
+  @@index([destinationId])
+}
+
+model ItineraryDay {
+  id             String          @id @default(cuid())
+  tripId         String
+  date           DateTime
+  title          String?
+  city           String?
+  theme          String?
+  weatherSummary String?
+  notes          String?
+  trip           Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  items          ItineraryItem[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([tripId, date])
+  @@index([tripId])
+}
+
+model ItineraryItem {
+  id              String              @id @default(cuid())
+  tripId          String
+  dayId           String
+  placeId         String?
+  title           String
+  type            ItineraryItemType   @default(OTHER)
+  startTime       DateTime?
+  endTime         DateTime?
+  durationMin     Int?
+  costEstimate    Decimal?
+  bookingStatus   BookingStatus       @default(TODO)
+  priority        Priority            @default(MEDIUM)
+  status          ItineraryItemStatus @default(PLANNED)
+  transportToNext String?
+  notes           String?
+  sortOrder       Int                 @default(0)
+  trip            Trip                @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  day             ItineraryDay        @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  place           Place?              @relation(fields: [placeId], references: [id], onDelete: SetNull)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([tripId])
+  @@index([dayId])
+  @@index([placeId])
+}
+
+model TransportOption {
+  id                   String        @id @default(cuid())
+  tripId               String
+  fromName             String
+  toName               String
+  mode                 TransportMode @default(OTHER)
+  provider             String?
+  trainOrFlightNo      String?
+  departTime           DateTime?
+  arriveTime           DateTime?
+  doorToDoorMinutes    Int?
+  price                Decimal?
+  currency             String?
+  transferCount        Int?
+  comfortScore         Int?
+  riskScore            Int?
+  luggageFriendlyScore Int?
+  flexibilityScore     Int?
+  bookingUrl           String?
+  status               BookingStatus @default(TODO)
+  notes                String?
+  trip                 Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  selectedByRoutes     RoutePlan[]   @relation("SelectedTransportOption")
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([tripId])
+}
+
+model RoutePlan {
+  id               String           @id @default(cuid())
+  tripId           String
+  title            String
+  fromName         String
+  toName           String
+  departDate       DateTime?
+  weights          Json?
+  selectedOptionId String?
+  resultJson       Json?
+  notes            String?
+  trip             Trip             @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  selectedOption   TransportOption? @relation("SelectedTransportOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([tripId])
+  @@index([selectedOptionId])
+}
+
+model ChecklistItem {
+  id         String          @id @default(cuid())
+  tripId     String
+  category   String
+  title      String
+  quantity   Int             @default(1)
+  importance Priority        @default(MEDIUM)
+  dueDate    DateTime?
+  status     ChecklistStatus @default(TODO)
+  notes      String?
+  trip       Trip            @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([tripId])
+}
+
+model Expense {
+  id             String    @id @default(cuid())
+  tripId         String
+  category       String
+  title          String
+  amount         Decimal
+  currency       String
+  exchangeRate   Decimal?
+  paidAt         DateTime?
+  payer          String?
+  splitWith      Json?
+  relatedPlaceId String?
+  notes          String?
+  trip           Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  relatedPlace   Place?    @relation(fields: [relatedPlaceId], references: [id], onDelete: SetNull)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tripId])
+  @@index([relatedPlaceId])
+}
+
+model Document {
+  id               String       @id @default(cuid())
+  tripId           String
+  title            String
+  type             DocumentType @default(OTHER)
+  filePath         String
+  originalFileName String?
+  mimeType         String?
+  fileSize         Int?
+  isSensitive      Boolean      @default(false)
+  isEncrypted      Boolean      @default(false)
+  relatedDate      DateTime?
+  notes            String?
+  trip             Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([tripId])
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  tripId    String
+  title     String
+  content   String
+  sourceUrl String?
+  tags      Json?
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId])
+}
+
+model AiConversation {
+  id              String   @id @default(cuid())
+  tripId          String?
+  title           String
+  purpose         String?
+  promptRedacted  String?
+  responseSummary String?
+  trip            Trip?    @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tripId])
+}
+
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
