@@ -31,6 +31,10 @@ export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
 
+  await cleanupExpiredSessions().catch((error: unknown) => {
+    console.error("Failed to clean up expired sessions.", error);
+  });
+
   await prisma.session.create({
     data: {
       userId,
@@ -40,6 +44,12 @@ export async function createSession(userId: string) {
   });
 
   return { token, expiresAt };
+}
+
+export async function cleanupExpiredSessions(now = new Date()) {
+  return prisma.session.deleteMany({
+    where: { expiresAt: { lte: now } },
+  });
 }
 
 export async function setSessionCookie(token: string, expiresAt: Date) {

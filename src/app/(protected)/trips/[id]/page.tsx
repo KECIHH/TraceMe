@@ -30,12 +30,15 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
         select: {
           checklistItems: true,
           destinations: true,
+          documents: true,
+          expenses: true,
           itineraryDays: true,
           notes: true,
           places: true,
           routePlans: true,
         },
       },
+      places: { select: { type: true } },
     },
     where: { id },
   });
@@ -45,6 +48,8 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
   }
 
   const durationDays = getTripDurationDays(trip.startDate, trip.endDate);
+  const foodCount = trip.places.filter((place) => place.type === "RESTAURANT").length;
+  const stayCount = trip.places.filter((place) => place.type === "HOTEL").length;
   const archiveAction = archiveTripAction.bind(null, trip.id);
   const deleteAction = deleteTripAction.bind(null, trip.id);
 
@@ -129,7 +134,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             </p>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <ModuleLink
             count={trip._count.destinations}
             href={`/trips/${trip.id}/destinations`}
@@ -139,6 +144,16 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             count={trip._count.places}
             href={`/trips/${trip.id}/places`}
             label="地点库"
+          />
+          <ModuleLink
+            count={foodCount}
+            href={`/trips/${trip.id}/foods`}
+            label="美食"
+          />
+          <ModuleLink
+            count={stayCount}
+            href={`/trips/${trip.id}/stays`}
+            label="住宿"
           />
           <ModuleLink
             count={trip._count.itineraryDays}
@@ -154,6 +169,16 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             count={trip._count.routePlans}
             href={`/trips/${trip.id}/routes`}
             label="交通方案"
+          />
+          <ModuleLink
+            count={trip._count.expenses}
+            href={`/trips/${trip.id}/budget`}
+            label="预算花销"
+          />
+          <ModuleLink
+            count={trip._count.documents}
+            href={`/trips/${trip.id}/documents`}
+            label="文件票据"
           />
           <ModuleLink
             count={trip._count.notes}

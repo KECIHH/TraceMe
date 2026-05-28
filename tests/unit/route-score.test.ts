@@ -50,6 +50,20 @@ describe("route scoring", () => {
     expect(weights.cost).toBeCloseTo(2 / 5);
   });
 
+  it("falls back to default weights when all custom weights are zero", () => {
+    expect(
+      normalizeWeights({
+        time: 0,
+        cost: 0,
+        comfort: 0,
+        transfer: 0,
+        risk: 0,
+        luggage: 0,
+        flexibility: 0,
+      }),
+    ).toEqual(ROUTE_WEIGHT_PRESETS[0].weights);
+  });
+
   it("scores a single option", () => {
     const [score] = scoreTransportOptions([baseOption]);
 
@@ -120,5 +134,16 @@ describe("route scoring", () => {
 
     expect(score.isIncomplete).toBe(true);
     expect(score.missingRequiredFields).toEqual(["time", "cost"]);
+  });
+
+  it("handles options where every candidate is missing time and cost", () => {
+    const scores = scoreTransportOptions([
+      { ...baseOption, id: "first", doorToDoorMinutes: null, price: null },
+      { ...baseOption, id: "second", doorToDoorMinutes: null, price: null },
+    ]);
+
+    expect(scores).toHaveLength(2);
+    expect(scores.every((score) => score.isIncomplete)).toBe(true);
+    expect(scores.every((score) => Number.isFinite(score.score))).toBe(true);
   });
 });

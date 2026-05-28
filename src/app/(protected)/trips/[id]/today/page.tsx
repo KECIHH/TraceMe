@@ -88,7 +88,7 @@ export default async function TodayPage({
       <Notice error={queryParams.error} message={queryParams.message} />
 
       <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-[#2f6f73]">Today</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">今日</p>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h1 className="text-3xl font-semibold">今日模式</h1>

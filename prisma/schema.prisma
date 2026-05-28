@@ -90,9 +90,19 @@ enum ChecklistStatus {
 }
 
 enum DocumentType {
+  FLIGHT_TICKET
+  TRAIN_TICKET
+  HOTEL_BOOKING
+  ATTRACTION_RESERVATION
+  INSURANCE_POLICY
+  CAR_RENTAL
+  VISA_DOCUMENT
   PASSPORT
-  VISA
+  ID_CARD
+  ITINERARY
+  PAYMENT_PROOF
   TICKET
+  VISA
   BOOKING
   INSURANCE
   RECEIPT
@@ -103,6 +113,21 @@ enum ItineraryItemStatus {
   PLANNED
   DONE
   SKIPPED
+}
+
+enum FoodStatus {
+  WANT_TO_TRY
+  EATEN
+  AVOID
+}
+
+enum StayBookingStatus {
+  CONSIDERING
+  RESERVED
+  PAID
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
 }
 
 model User {
@@ -147,6 +172,7 @@ model Trip {
   transports      TransportOption[]
   routePlans      RoutePlan[]
   checklistItems  ChecklistItem[]
+  categoryBudgets CategoryBudget[]
   expenses        Expense[]
   documents       Document[]
   notes           Note[]
@@ -201,11 +227,43 @@ model Place {
   destination          Destination?    @relation(fields: [destinationId], references: [id], onDelete: SetNull)
   itineraryItems       ItineraryItem[]
   expenses             Expense[]
+  foodDetail           FoodDetail?
+  stayDetail           StayDetail?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
   @@index([tripId])
   @@index([destinationId])
+}
+
+model FoodDetail {
+  id                String     @id @default(cuid())
+  placeId           String     @unique
+  recommendedDishes Json?
+  averageCost       Decimal?
+  foodStatus        FoodStatus @default(WANT_TO_TRY)
+  reservationNeeded Boolean    @default(false)
+  notes             String?
+  place             Place      @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model StayDetail {
+  id                 String            @id @default(cuid())
+  placeId            String            @unique
+  checkInDate        DateTime?
+  checkOutDate       DateTime?
+  bookingStatus      StayBookingStatus @default(CONSIDERING)
+  totalCost          Decimal?
+  breakfastIncluded  Boolean           @default(false)
+  luggageStorage     Boolean           @default(false)
+  cancellationPolicy String?
+  bookingReference   String?
+  notes              String?
+  place              Place             @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 }
 
 model ItineraryDay {
@@ -321,6 +379,19 @@ model ChecklistItem {
   createdAt  DateTime        @default(now())
   updatedAt  DateTime        @updatedAt
 
+  @@index([tripId])
+}
+
+model CategoryBudget {
+  id        String   @id @default(cuid())
+  tripId    String
+  category  String
+  amount    Decimal
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tripId, category])
   @@index([tripId])
 }
 

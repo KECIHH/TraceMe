@@ -1,10 +1,13 @@
 "use server";
 
+import { unlink } from "node:fs/promises";
+
 import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 import { requireUser } from "@/lib/auth/session";
+import { resolveUploadPath } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import {
   formDataToTripValues,
@@ -106,6 +109,10 @@ export async function archiveTripAction(tripId: string) {
 
 export async function deleteTripAction(tripId: string) {
   await requireUser();
+  const documents = await prisma.document.findMany({
+    select: { filePath: true },
+    where: { tripId },
+  });
 
   try {
     await prisma.trip.delete({
@@ -118,6 +125,8 @@ export async function deleteTripAction(tripId: string) {
 
     throw error;
   }
+
+  await removeTripDocumentFiles(documents.map((document) => document.filePath));
 
   revalidatePath("/dashboard");
   revalidatePath("/trips");
@@ -152,5 +161,31 @@ function isPrismaNotFoundError(
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
     error.code === "P2025"
+  );
+}
+
+async function removeTripDocumentFiles(filePaths: string[]) {
+  await Promise.all(
+    filePaths.map(async (filePath) => {
+      try {
+        await unlink(resolveUploadPath(filePath));
+      } catch (error) {
+        if (!isFileMissingError(error)) {
+          console.error("Failed to delete trip document file.", {
+            error,
+            filePath,
+          });
+        }
+      }
+    }),
+  );
+}
+
+function isFileMissingError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
   );
 }

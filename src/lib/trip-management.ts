@@ -1,4 +1,10 @@
-import type { ChecklistStatus, PlaceType, Priority } from "@prisma/client";
+import type {
+  ChecklistStatus,
+  FoodStatus,
+  PlaceType,
+  Priority,
+  StayBookingStatus,
+} from "@prisma/client";
 
 export const PLACE_TYPE_OPTIONS: Array<{ value: PlaceType; label: string }> = [
   { value: "ATTRACTION", label: "景点" },
@@ -10,6 +16,9 @@ export const PLACE_TYPE_OPTIONS: Array<{ value: PlaceType; label: string }> = [
   { value: "HOSPITAL", label: "医院" },
   { value: "EMBASSY", label: "使领馆" },
   { value: "EMERGENCY", label: "紧急地点" },
+  { value: "TRANSPORT", label: "交通点" },
+  { value: "SHOPPING", label: "购物点" },
+  { value: "ACTIVITY", label: "活动" },
   { value: "OTHER", label: "其他" },
 ];
 
@@ -27,6 +36,27 @@ export const CHECKLIST_STATUS_OPTIONS: Array<{
   { value: "TODO", label: "未准备" },
   { value: "DONE", label: "已准备" },
   { value: "SKIPPED", label: "不需要" },
+];
+
+export const FOOD_STATUS_OPTIONS: Array<{
+  value: FoodStatus;
+  label: string;
+}> = [
+  { value: "WANT_TO_TRY", label: "想吃" },
+  { value: "EATEN", label: "已吃" },
+  { value: "AVOID", label: "避雷" },
+];
+
+export const STAY_BOOKING_STATUS_OPTIONS: Array<{
+  value: StayBookingStatus;
+  label: string;
+}> = [
+  { value: "CONSIDERING", label: "备选" },
+  { value: "RESERVED", label: "已预订" },
+  { value: "PAID", label: "已付款" },
+  { value: "CHECKED_IN", label: "已入住" },
+  { value: "COMPLETED", label: "已完成" },
+  { value: "CANCELLED", label: "已取消" },
 ];
 
 export const CHECKLIST_CATEGORIES = [
@@ -93,6 +123,20 @@ export function getChecklistStatusLabel(status: ChecklistStatus): string {
   );
 }
 
+export function getFoodStatusLabel(status: FoodStatus): string {
+  return (
+    FOOD_STATUS_OPTIONS.find((option) => option.value === status)?.label ??
+    status
+  );
+}
+
+export function getStayBookingStatusLabel(status: StayBookingStatus): string {
+  return (
+    STAY_BOOKING_STATUS_OPTIONS.find((option) => option.value === status)
+      ?.label ?? status
+  );
+}
+
 export function isPlaceType(value: string): value is PlaceType {
   return PLACE_TYPE_OPTIONS.some((option) => option.value === value);
 }
@@ -103,6 +147,14 @@ export function isPriority(value: string): value is Priority {
 
 export function isChecklistStatus(value: string): value is ChecklistStatus {
   return CHECKLIST_STATUS_OPTIONS.some((option) => option.value === value);
+}
+
+export function isFoodStatus(value: string): value is FoodStatus {
+  return FOOD_STATUS_OPTIONS.some((option) => option.value === value);
+}
+
+export function isStayBookingStatus(value: string): value is StayBookingStatus {
+  return STAY_BOOKING_STATUS_OPTIONS.some((option) => option.value === value);
 }
 
 export function isValidOptionalHttpUrl(value: string): boolean {

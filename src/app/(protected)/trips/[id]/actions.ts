@@ -7,12 +7,22 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import {
+  BUDGET_CATEGORIES,
+  isValidCurrencyCode,
+  isValidNonNegativeAmount,
+  isValidOptionalNonNegativeAmount,
+  isValidOptionalPositiveRate,
+  normalizeExpenseCategory,
+} from "@/lib/budget";
+import {
   BASIC_CHECKLIST_TEMPLATE,
   CHECKLIST_CATEGORIES,
   emptyToNull,
+  isFoodStatus,
   isChecklistStatus,
   isPlaceType,
   isPriority,
+  isStayBookingStatus,
   isValidLatitude,
   isValidLongitude,
   isValidOptionalNonNegativeInteger,
@@ -24,7 +34,14 @@ import {
   splitTags,
 } from "@/lib/trip-management";
 
-type TripModule = "destinations" | "places" | "notes" | "checklist";
+type TripModule =
+  | "budget"
+  | "checklist"
+  | "destinations"
+  | "foods"
+  | "notes"
+  | "places"
+  | "stays";
 
 export async function createDestinationAction(tripId: string, formData: FormData) {
   await requireTrip(tripId);
@@ -200,6 +217,265 @@ export async function deletePlaceAction(tripId: string, placeId: string) {
   );
   revalidateTrip(tripId);
   redirectWithMessage(redirectPath, "message", "地点已删除。");
+}
+
+export async function createFoodAction(tripId: string, formData: FormData) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "foods");
+  const validationError = validateFoodForm(formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const place = await tx.place.create({
+      data: {
+        tripId,
+        name: requiredText(formData, "name"),
+        type: "RESTAURANT",
+        address: optionalText(formData, "address"),
+        phone: optionalText(formData, "phone"),
+        openingHours:
+          optionalText(formData, "openingHours") ?? Prisma.JsonNull,
+        estimatedCost: optionalText(formData, "averageCost"),
+        priority:
+          formValue(formData, "foodStatus") === "AVOID" ? "AVOID" : "MEDIUM",
+        notes: optionalText(formData, "placeNotes"),
+      },
+    });
+
+    await tx.foodDetail.create({
+      data: buildFoodDetailData(place.id, formData),
+    });
+  });
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "餐厅已新增。");
+}
+
+export async function updateFoodAction(
+  tripId: string,
+  placeId: string,
+  formData: FormData,
+) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "foods");
+  const validationError = validateFoodForm(formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await runMutationOrRedirect(
+    () =>
+      prisma.place.update({
+        where: { id: placeId, tripId },
+        data: {
+          name: requiredText(formData, "name"),
+          type: "RESTAURANT",
+          address: optionalText(formData, "address"),
+          phone: optionalText(formData, "phone"),
+          openingHours:
+            optionalText(formData, "openingHours") ?? Prisma.JsonNull,
+          estimatedCost: optionalText(formData, "averageCost"),
+          priority:
+            formValue(formData, "foodStatus") === "AVOID"
+              ? "AVOID"
+              : "MEDIUM",
+          notes: optionalText(formData, "placeNotes"),
+          foodDetail: {
+            upsert: {
+              create: buildFoodDetailCreateData(formData),
+              update: buildFoodDetailUpdateData(formData),
+            },
+          },
+        },
+      }),
+    redirectPath,
+    "餐厅不存在或已被删除。",
+  );
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "餐厅已更新。");
+}
+
+export async function createStayAction(tripId: string, formData: FormData) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "stays");
+  const validationError = validateStayForm(formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const place = await tx.place.create({
+      data: {
+        tripId,
+        name: requiredText(formData, "name"),
+        type: "HOTEL",
+        address: optionalText(formData, "address"),
+        phone: optionalText(formData, "phone"),
+        estimatedCost: optionalText(formData, "totalCost"),
+        notes: optionalText(formData, "placeNotes"),
+      },
+    });
+
+    await tx.stayDetail.create({
+      data: buildStayDetailData(place.id, formData),
+    });
+  });
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "住宿已新增。");
+}
+
+export async function updateStayAction(
+  tripId: string,
+  placeId: string,
+  formData: FormData,
+) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "stays");
+  const validationError = validateStayForm(formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await runMutationOrRedirect(
+    () =>
+      prisma.place.update({
+        where: { id: placeId, tripId },
+        data: {
+          name: requiredText(formData, "name"),
+          type: "HOTEL",
+          address: optionalText(formData, "address"),
+          phone: optionalText(formData, "phone"),
+          estimatedCost: optionalText(formData, "totalCost"),
+          notes: optionalText(formData, "placeNotes"),
+          stayDetail: {
+            upsert: {
+              create: buildStayDetailCreateData(formData),
+              update: buildStayDetailUpdateData(formData),
+            },
+          },
+        },
+      }),
+    redirectPath,
+    "住宿不存在或已被删除。",
+  );
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "住宿已更新。");
+}
+
+export async function updateBudgetAction(tripId: string, formData: FormData) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "budget");
+  const totalBudget = formValue(formData, "budgetAmount");
+
+  if (!isValidOptionalNonNegativeAmount(totalBudget)) {
+    redirectWithMessage(redirectPath, "error", "总预算不能小于 0。");
+  }
+
+  for (const category of BUDGET_CATEGORIES) {
+    const value = formValue(formData, budgetFieldName(category));
+
+    if (!isValidOptionalNonNegativeAmount(value)) {
+      redirectWithMessage(
+        redirectPath,
+        "error",
+        `${category} 分类预算不能小于 0。`,
+      );
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.trip.update({
+      where: { id: tripId },
+      data: { budgetAmount: optionalText(formData, "budgetAmount") },
+    });
+
+    for (const category of BUDGET_CATEGORIES) {
+      const value = optionalText(formData, budgetFieldName(category));
+
+      if (!value) {
+        await tx.categoryBudget.deleteMany({
+          where: { category, tripId },
+        });
+        continue;
+      }
+
+      await tx.categoryBudget.upsert({
+        create: { amount: value, category, tripId },
+        update: { amount: value },
+        where: { tripId_category: { category, tripId } },
+      });
+    }
+  });
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "预算已更新。");
+}
+
+export async function createExpenseAction(tripId: string, formData: FormData) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "budget");
+  const validationError = await validateExpenseForm(tripId, formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await prisma.expense.create({
+    data: buildExpenseData(tripId, formData),
+  });
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "支出已新增。");
+}
+
+export async function updateExpenseAction(
+  tripId: string,
+  expenseId: string,
+  formData: FormData,
+) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "budget");
+  const validationError = await validateExpenseForm(tripId, formData);
+
+  if (validationError) {
+    redirectWithMessage(redirectPath, "error", validationError);
+  }
+
+  await runMutationOrRedirect(
+    () =>
+      prisma.expense.update({
+        where: { id: expenseId, tripId },
+        data: buildExpenseData(tripId, formData),
+      }),
+    redirectPath,
+    "支出不存在或已被删除。",
+  );
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "支出已更新。");
+}
+
+export async function deleteExpenseAction(tripId: string, expenseId: string) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "budget");
+
+  await runMutationOrRedirect(
+    () => prisma.expense.delete({ where: { id: expenseId, tripId } }),
+    redirectPath,
+    "支出不存在或已被删除。",
+  );
+
+  revalidateTrip(tripId);
+  redirectWithMessage(redirectPath, "message", "支出已删除。");
 }
 
 export async function createNoteAction(tripId: string, formData: FormData) {
@@ -437,6 +713,68 @@ function buildPlaceData(
   };
 }
 
+function buildFoodDetailData(placeId: string, formData: FormData) {
+  return {
+    placeId,
+    ...buildFoodDetailCreateData(formData),
+  };
+}
+
+function buildFoodDetailCreateData(formData: FormData) {
+  return {
+    recommendedDishes: splitTags(formValue(formData, "recommendedDishes")),
+    averageCost: optionalText(formData, "averageCost"),
+    foodStatus: parseFoodStatus(formValue(formData, "foodStatus")),
+    reservationNeeded: formData.get("reservationNeeded") === "on",
+    notes: optionalText(formData, "notes"),
+  };
+}
+
+function buildFoodDetailUpdateData(formData: FormData) {
+  return buildFoodDetailCreateData(formData);
+}
+
+function buildStayDetailData(placeId: string, formData: FormData) {
+  return {
+    placeId,
+    ...buildStayDetailCreateData(formData),
+  };
+}
+
+function buildStayDetailCreateData(formData: FormData) {
+  return {
+    checkInDate: parseDateInput(formValue(formData, "checkInDate")),
+    checkOutDate: parseDateInput(formValue(formData, "checkOutDate")),
+    bookingStatus: parseStayBookingStatus(formValue(formData, "bookingStatus")),
+    totalCost: optionalText(formData, "totalCost"),
+    breakfastIncluded: formData.get("breakfastIncluded") === "on",
+    luggageStorage: formData.get("luggageStorage") === "on",
+    cancellationPolicy: optionalText(formData, "cancellationPolicy"),
+    bookingReference: optionalText(formData, "bookingReference"),
+    notes: optionalText(formData, "notes"),
+  };
+}
+
+function buildStayDetailUpdateData(formData: FormData) {
+  return buildStayDetailCreateData(formData);
+}
+
+function buildExpenseData(tripId: string, formData: FormData) {
+  return {
+    tripId,
+    title: requiredText(formData, "title"),
+    category: normalizeExpenseCategory(formValue(formData, "category")),
+    amount: requiredText(formData, "amount"),
+    currency: requiredText(formData, "currency").toUpperCase(),
+    exchangeRate: optionalText(formData, "exchangeRate"),
+    paidAt: parseDateInput(formValue(formData, "paidAt")),
+    payer: optionalText(formData, "payer"),
+    splitWith: splitTags(formValue(formData, "splitWith")),
+    relatedPlaceId: optionalText(formData, "relatedPlaceId"),
+    notes: optionalText(formData, "notes"),
+  };
+}
+
 function buildChecklistItemData(tripId: string, formData: FormData) {
   const category = formValue(formData, "category");
   const importance = formValue(formData, "importance");
@@ -484,6 +822,95 @@ function validatePlaceForm(formData: FormData): string | null {
   }
 
   return validateCoordinates(formData);
+}
+
+function validateFoodForm(formData: FormData): string | null {
+  if (!requiredText(formData, "name")) {
+    return "请填写餐厅名称。";
+  }
+
+  if (!isValidOptionalNonNegativeNumber(formValue(formData, "averageCost"))) {
+    return "人均价格不能小于 0。";
+  }
+
+  if (!isFoodStatus(formValue(formData, "foodStatus"))) {
+    return "请选择有效的美食状态。";
+  }
+
+  return null;
+}
+
+function validateStayForm(formData: FormData): string | null {
+  if (!requiredText(formData, "name")) {
+    return "请填写住宿名称。";
+  }
+
+  if (!isValidOptionalNonNegativeNumber(formValue(formData, "totalCost"))) {
+    return "住宿总价不能小于 0。";
+  }
+
+  if (!isStayBookingStatus(formValue(formData, "bookingStatus"))) {
+    return "请选择有效的订单状态。";
+  }
+
+  const checkInDate = parseDateInput(formValue(formData, "checkInDate"));
+  const checkOutDate = parseDateInput(formValue(formData, "checkOutDate"));
+
+  if (formValue(formData, "checkInDate") && !checkInDate) {
+    return "请输入有效的入住日期。";
+  }
+
+  if (formValue(formData, "checkOutDate") && !checkOutDate) {
+    return "请输入有效的退房日期。";
+  }
+
+  if (checkInDate && checkOutDate && checkOutDate.getTime() < checkInDate.getTime()) {
+    return "退房日期不能早于入住日期。";
+  }
+
+  return null;
+}
+
+async function validateExpenseForm(
+  tripId: string,
+  formData: FormData,
+): Promise<string | null> {
+  if (!requiredText(formData, "title")) {
+    return "请填写支出标题。";
+  }
+
+  if (!isValidNonNegativeAmount(formValue(formData, "amount"))) {
+    return "金额不能小于 0。";
+  }
+
+  if (!isValidCurrencyCode(formValue(formData, "currency"))) {
+    return "货币必须是 3 位字母代码，例如 CNY。";
+  }
+
+  if (!isValidOptionalPositiveRate(formValue(formData, "exchangeRate"))) {
+    return "汇率必须大于 0。";
+  }
+
+  const paidAtValue = formValue(formData, "paidAt");
+
+  if (paidAtValue && !parseDateInput(paidAtValue)) {
+    return "请输入有效的支出时间。";
+  }
+
+  const relatedPlaceId = optionalText(formData, "relatedPlaceId");
+
+  if (relatedPlaceId) {
+    const place = await prisma.place.findFirst({
+      select: { id: true },
+      where: { id: relatedPlaceId, tripId },
+    });
+
+    if (!place) {
+      return "关联地点不属于当前旅行。";
+    }
+  }
+
+  return null;
 }
 
 async function resolveDestinationIdForTrip(
@@ -544,6 +971,18 @@ function formValue(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "");
 }
 
+function parseFoodStatus(value: string) {
+  return isFoodStatus(value) ? value : "WANT_TO_TRY";
+}
+
+function parseStayBookingStatus(value: string) {
+  return isStayBookingStatus(value) ? value : "CONSIDERING";
+}
+
+function budgetFieldName(category: string): string {
+  return `budget-${category}`;
+}
+
 function modulePath(tripId: string, moduleName: TripModule): string {
   return `/trips/${tripId}/${moduleName}`;
 }
@@ -583,8 +1022,11 @@ function isPrismaNotFoundError(
 
 function revalidateTrip(tripId: string) {
   revalidatePath(`/trips/${tripId}`);
+  revalidatePath(`/trips/${tripId}/budget`);
   revalidatePath(`/trips/${tripId}/destinations`);
+  revalidatePath(`/trips/${tripId}/foods`);
   revalidatePath(`/trips/${tripId}/places`);
   revalidatePath(`/trips/${tripId}/notes`);
   revalidatePath(`/trips/${tripId}/checklist`);
+  revalidatePath(`/trips/${tripId}/stays`);
 }

@@ -252,7 +252,7 @@ export default async function RoutePlanDetailPage({
                   <Info label="价格" value={formatPrice(option.price, option.currency)} />
                   <Info label="中转次数" value={`${option.transferCount ?? "未设置"}`} />
                   <Info label="舒适度" value={formatScore(option.comfortScore)} />
-                  <Info label="风险程度" value={formatScore(option.riskScore)} />
+                  <Info label="风险评分" value={formatScore(option.riskScore)} />
                   <Info label="行李友好度" value={formatScore(option.luggageFriendlyScore)} />
                   <Info label="退改灵活度" value={formatScore(option.flexibilityScore)} />
                 </dl>
@@ -329,7 +329,7 @@ export default async function RoutePlanDetailPage({
                   <th className="py-3 pr-4">价格</th>
                   <th className="py-3 pr-4">中转</th>
                   <th className="py-3 pr-4">舒适度</th>
-                  <th className="py-3 pr-4">风险</th>
+                  <th className="py-3 pr-4">风险评分</th>
                   <th className="py-3 pr-4">行李</th>
                   <th className="py-3 pr-4">灵活度</th>
                   <th className="py-3 pr-4">总分</th>

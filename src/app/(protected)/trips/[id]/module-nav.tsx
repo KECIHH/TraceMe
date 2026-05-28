@@ -4,9 +4,13 @@ const moduleLinks = [
   { href: "", label: "概览" },
   { href: "destinations", label: "目的地" },
   { href: "places", label: "地点库" },
+  { href: "foods", label: "美食" },
+  { href: "stays", label: "住宿" },
   { href: "itinerary", label: "行程日历" },
   { href: "today", label: "今日模式" },
   { href: "routes", label: "交通方案" },
+  { href: "budget", label: "预算" },
+  { href: "documents", label: "文件票据" },
   { href: "notes", label: "笔记" },
   { href: "checklist", label: "准备清单" },
 ];
