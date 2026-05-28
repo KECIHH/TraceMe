@@ -27,7 +27,7 @@ test("seed user can login, visit dashboard, and logout", async ({ page }) => {
   await page.getByRole("button", { name: "登录" }).click();
 
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole("heading", { name: "欢迎回到迹遇" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "旅行工作台" })).toBeVisible();
 
   await page.getByRole("button", { name: "退出登录" }).click();
   await expect(page).toHaveURL(/\/login$/);

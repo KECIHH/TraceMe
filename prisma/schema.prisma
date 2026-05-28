@@ -12,9 +12,11 @@ enum UserRole {
 }
 
 enum TripStatus {
-  DRAFT
+  INSPIRATION
   PLANNING
-  ACTIVE
+  BOOKED
+  DEPARTING_SOON
+  TRAVELING
   COMPLETED
   ARCHIVED
 }
@@ -23,6 +25,12 @@ enum PlaceType {
   ATTRACTION
   RESTAURANT
   HOTEL
+  STATION
+  AIRPORT
+  STORE
+  HOSPITAL
+  EMBASSY
+  EMERGENCY
   TRANSPORT
   SHOPPING
   ACTIVITY
@@ -33,6 +41,7 @@ enum Priority {
   LOW
   MEDIUM
   HIGH
+  AVOID
 }
 
 enum BookingStatus {
@@ -115,7 +124,7 @@ model Trip {
   id              String            @id @default(cuid())
   title           String
   description     String?
-  status          TripStatus        @default(DRAFT)
+  status          TripStatus        @default(INSPIRATION)
   startDate       DateTime?
   endDate         DateTime?
   homeCity        String?
