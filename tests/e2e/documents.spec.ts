@@ -7,8 +7,21 @@ async function login(page: import("@playwright/test").Page) {
   await page.goto("/login");
   await page.getByLabel("用户名").fill(username);
   await page.getByLabel("密码").fill(password);
+
+  const responsePromise = page.waitForResponse(response =>
+    response.url().includes('/api/auth/login') && response.request().method() === 'POST'
+  );
+
   await page.getByRole("button", { name: "登录" }).click();
-  await expect(page).toHaveURL(/\/dashboard$/);
+
+  const response = await responsePromise;
+  const body = await response.json();
+
+  if (!response.ok()) {
+    throw new Error(`Login failed: ${response.status()} - ${JSON.stringify(body)}`);
+  }
+
+  await page.waitForURL(/\/dashboard$/, { timeout: 10000 });
 }
 
 async function createTrip(page: import("@playwright/test").Page, title: string) {

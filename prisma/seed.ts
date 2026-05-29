@@ -8,6 +8,7 @@ async function main() {
   const username = process.env.INITIAL_ADMIN_USERNAME;
   const password = process.env.INITIAL_ADMIN_PASSWORD;
   const shouldResetPassword = process.env.RESET_ADMIN_PASSWORD === "true";
+  const shouldResetAiEnabled = process.env.RESET_AI_ENABLED === "true";
 
   if (!username || !password) {
     throw new Error(
@@ -42,6 +43,21 @@ async function main() {
     update: { value: "TraceMe" },
     create: { key: "app.name", value: "TraceMe" },
   });
+
+  const aiEnabledSetting = await prisma.appSetting.findUnique({
+    where: { key: "ai.enabled" },
+  });
+
+  if (shouldResetAiEnabled && aiEnabledSetting) {
+    await prisma.appSetting.update({
+      where: { key: "ai.enabled" },
+      data: { value: "true" },
+    });
+  } else if (!aiEnabledSetting) {
+    await prisma.appSetting.create({
+      data: { key: "ai.enabled", value: "true" },
+    });
+  }
 
   console.log(`Seed complete: admin user "${username}" is ready.`);
 }

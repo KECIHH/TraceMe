@@ -1,0 +1,35 @@
+import { NextResponse } from "next/server";
+
+import { getCurrentUser } from "@/lib/auth/session";
+import { deleteBackupRecord } from "@/lib/backup/delete";
+
+type BackupDeleteRouteProps = {
+  params: Promise<{ backupId: string }>;
+};
+
+export async function POST(request: Request, { params }: BackupDeleteRouteProps) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { backupId } = await params;
+  const result = await deleteBackupRecord(backupId);
+  const redirectUrl = new URL("/settings/backups", request.url);
+  const errorReason = result.ok ? null : result.reason;
+  const errorMessage =
+    errorReason === "delete_failed"
+      ? "删除备份文件失败，请确认文件未被占用后重试。"
+      : "备份记录不存在或已被删除。";
+
+  redirectUrl.searchParams.set(
+    result.ok ? "message" : "error",
+    result.ok ? "备份文件已删除，记录已保留。" : errorMessage,
+  );
+
+  return NextResponse.json(
+    { ok: result.ok, redirectUrl: `${redirectUrl.pathname}${redirectUrl.search}` },
+    { status: result.ok ? 200 : errorReason === "delete_failed" ? 409 : 404 },
+  );
+}

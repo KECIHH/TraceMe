@@ -34,6 +34,7 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
           expenses: true,
           itineraryDays: true,
           notes: true,
+          aiConversations: true,
           places: true,
           routePlans: true,
         },
@@ -179,6 +180,16 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             count={trip._count.documents}
             href={`/trips/${trip.id}/documents`}
             label="文件票据"
+          />
+          <ModuleLink
+            count={3}
+            href={`/trips/${trip.id}/export`}
+            label="导出"
+          />
+          <ModuleLink
+            count={trip._count.aiConversations}
+            href={`/trips/${trip.id}/ai`}
+            label="AI 助手"
           />
           <ModuleLink
             count={trip._count.notes}
