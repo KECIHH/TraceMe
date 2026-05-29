@@ -9,6 +9,8 @@ $AppBaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "http://127.0.
 $AdminUsername = if ($env:INITIAL_ADMIN_USERNAME) { $env:INITIAL_ADMIN_USERNAME } else { "admin" }
 $SeedExampleTrip = if ($env:SEED_EXAMPLE_TRIP) { $env:SEED_EXAMPLE_TRIP } else { "true" }
 $BuildRetries = if ($env:TRACEME_BUILD_RETRIES) { [int]$env:TRACEME_BUILD_RETRIES } else { 3 }
+$NpmConfigRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
+$AlpineRepositoryMirror = if ($env:ALPINE_REPOSITORY_MIRROR) { $env:ALPINE_REPOSITORY_MIRROR } else { "https://mirrors.aliyun.com/alpine" }
 
 function Require-Command {
   param([string]$Name)
@@ -59,6 +61,30 @@ function Show-BuildNetworkHelp {
   Write-Host "  docker image rm node:lts-alpine"
   Write-Host "  docker compose up -d --build"
   Write-Host ""
+}
+
+function Ensure-EnvValue {
+  param(
+    [string]$Path,
+    [string]$Key,
+    [string]$Value
+  )
+
+  if (-not $Value) {
+    return
+  }
+
+  if (Test-Path -LiteralPath $Path) {
+    $line = Get-Content -LiteralPath $Path -Encoding UTF8 |
+      Where-Object { $_ -match "^$([Regex]::Escape($Key))=" } |
+      Select-Object -First 1
+
+    if ($line) {
+      return
+    }
+  }
+
+  Add-Content -LiteralPath $Path -Encoding UTF8 -Value "$Key=`"$Value`""
 }
 
 function Start-TraceMeContainer {
@@ -126,6 +152,8 @@ INITIAL_ADMIN_USERNAME="$AdminUsername"
 INITIAL_ADMIN_PASSWORD="$AdminPassword"
 TRACEME_BIND="$TraceMeBind"
 TRACEME_PORT="$TraceMePort"
+NPM_CONFIG_REGISTRY="$NpmConfigRegistry"
+ALPINE_REPOSITORY_MIRROR="$AlpineRepositoryMirror"
 
 # Optional
 OPENAI_API_KEY="$openAiKey"
@@ -169,6 +197,9 @@ if (-not (Test-Path -LiteralPath ".env")) {
 } else {
   Write-Host "Using existing .env."
 }
+
+Ensure-EnvValue -Path ".env" -Key "NPM_CONFIG_REGISTRY" -Value $NpmConfigRegistry
+Ensure-EnvValue -Path ".env" -Key "ALPINE_REPOSITORY_MIRROR" -Value $AlpineRepositoryMirror
 
 Write-Host "Building and starting TraceMe ..."
 Start-TraceMeContainer

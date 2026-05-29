@@ -1,12 +1,18 @@
 FROM node:lts-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache openssl
+ARG ALPINE_REPOSITORY_MIRROR=""
+ARG NPM_CONFIG_REGISTRY="https://registry.npmjs.org/"
+ENV npm_config_registry=${NPM_CONFIG_REGISTRY}
+RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
+  && apk add --no-cache openssl
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts --no-audit --fund=false
 
 FROM node:lts-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache openssl
+ARG ALPINE_REPOSITORY_MIRROR=""
+RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
+  && apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -15,15 +21,20 @@ RUN npm run build
 
 FROM node:lts-alpine AS prod-deps
 WORKDIR /app
-RUN apk add --no-cache openssl
+ARG ALPINE_REPOSITORY_MIRROR=""
+RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
+  && apk add --no-cache openssl
+COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev --ignore-scripts
+RUN npm prune --omit=dev --ignore-scripts --no-audit --fund=false
 RUN npx prisma generate
 
 FROM node:lts-alpine AS runner
 WORKDIR /app
-RUN apk add --no-cache openssl \
+ARG ALPINE_REPOSITORY_MIRROR=""
+RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
+  && apk add --no-cache openssl \
   && addgroup -S nodejs \
   && adduser -S nextjs -G nodejs
 

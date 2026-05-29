@@ -16,6 +16,8 @@ describe("private deployment configuration", () => {
     const compose = readProjectFile("docker-compose.yml");
 
     expect(compose).toContain("travel-planner:");
+    expect(compose).toContain("ALPINE_REPOSITORY_MIRROR:");
+    expect(compose).toContain("NPM_CONFIG_REGISTRY:");
     expect(compose).toContain(
       '"${TRACEME_BIND:-127.0.0.1}:${TRACEME_PORT:-3000}:3000"',
     );
@@ -46,6 +48,7 @@ describe("private deployment configuration", () => {
     expect(commandLine).not.toContain("seed-admin");
     expect(dockerfile).toContain("USER nextjs");
     expect(dockerfile).toContain("EXPOSE 3000");
+    expect(dockerfile).toContain("npm prune --omit=dev");
     expect(dockerfile).toContain("scripts/validate-production-env.mjs");
     expect(dockerfile).not.toContain("COPY --from=builder /app/scripts ./scripts");
   });

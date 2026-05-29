@@ -2,7 +2,11 @@ name: traceme
 
 services:
   travel-planner:
-    build: .
+    build:
+      context: .
+      args:
+        ALPINE_REPOSITORY_MIRROR: ${ALPINE_REPOSITORY_MIRROR:-}
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
     restart: unless-stopped
     env_file:
       - .env

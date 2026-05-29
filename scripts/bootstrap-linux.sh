@@ -10,6 +10,9 @@ APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:${TRACEME_PORT}}"
 ADMIN_USERNAME="${INITIAL_ADMIN_USERNAME:-admin}"
 SEED_EXAMPLE_TRIP="${SEED_EXAMPLE_TRIP:-true}"
 BUILD_RETRIES="${TRACEME_BUILD_RETRIES:-3}"
+BUILD_ATTEMPT_TIMEOUT="${TRACEME_BUILD_ATTEMPT_TIMEOUT:-1200}"
+NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
+ALPINE_REPOSITORY_MIRROR="${ALPINE_REPOSITORY_MIRROR:-https://mirrors.aliyun.com/alpine}"
 
 need_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -82,7 +85,7 @@ build_and_start() {
   for attempt in $(seq 1 "$BUILD_RETRIES"); do
     echo "Docker build/start attempt ${attempt}/${BUILD_RETRIES} ..."
 
-    if docker pull node:lts-alpine >/dev/null 2>&1 && docker_compose up -d --build; then
+    if docker pull node:lts-alpine >/dev/null 2>&1 && timeout "$BUILD_ATTEMPT_TIMEOUT" docker_compose up -d --build; then
       return
     fi
 
@@ -116,6 +119,18 @@ read_env_value() {
   ' "$env_file"
 }
 
+ensure_env_value() {
+  local key="$1"
+  local value="$2"
+  local env_file="$3"
+
+  if [ -z "$value" ] || grep -q "^${key}=" "$env_file"; then
+    return
+  fi
+
+  printf '%s="%s"\n' "$key" "$value" >>"$env_file"
+}
+
 write_env_file() {
   local env_file="$1"
   local session_secret="$2"
@@ -129,6 +144,8 @@ INITIAL_ADMIN_USERNAME="${ADMIN_USERNAME}"
 INITIAL_ADMIN_PASSWORD="${admin_password}"
 TRACEME_BIND="${TRACEME_BIND}"
 TRACEME_PORT="${TRACEME_PORT}"
+NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY}"
+ALPINE_REPOSITORY_MIRROR="${ALPINE_REPOSITORY_MIRROR}"
 
 # Optional
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
@@ -170,6 +187,9 @@ if [ ! -f .env ]; then
 else
   echo "Using existing .env."
 fi
+
+ensure_env_value "NPM_CONFIG_REGISTRY" "$NPM_CONFIG_REGISTRY" ".env"
+ensure_env_value "ALPINE_REPOSITORY_MIRROR" "$ALPINE_REPOSITORY_MIRROR" ".env"
 
 echo "Building and starting TraceMe ..."
 build_and_start

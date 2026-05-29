@@ -66,6 +66,8 @@ http://127.0.0.1:3000
 - `INITIAL_ADMIN_USERNAME`：初始管理员用户名，默认 `admin`。
 - `SEED_EXAMPLE_TRIP`：是否创建示例旅行，默认 `true`。
 - `TRACEME_BUILD_RETRIES`：Docker 构建失败时的重试次数，默认 `3`。
+- `NPM_CONFIG_REGISTRY`：Docker 构建时使用的 npm registry。一键脚本默认使用 `https://registry.npmmirror.com`。
+- `ALPINE_REPOSITORY_MIRROR`：Docker 构建时使用的 Alpine 软件源。一键脚本默认使用 `https://mirrors.aliyun.com/alpine`。
 
 示例：部署到服务器 `/opt/traceme`，监听 `8080` 并允许外部访问：
 
