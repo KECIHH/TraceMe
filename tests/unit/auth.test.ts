@@ -11,6 +11,7 @@ import {
   getClearSessionCookieOptions,
   getSessionCookieOptions,
   isSessionExpired,
+  shouldUseSecureCookies,
   type AuthUser,
 } from "@/lib/auth/session";
 
@@ -54,17 +55,21 @@ describe("protected route access", () => {
 });
 
 describe("session cookie options", () => {
-  it("uses secure, httpOnly, sameSite cookies in production", () => {
+  it("uses secure, httpOnly, sameSite cookies for HTTPS production deployments", () => {
     const expiresAt = new Date("2026-05-28T10:00:00.000Z");
 
-    expect(getSessionCookieOptions(expiresAt, "production")).toMatchObject({
+    expect(
+      getSessionCookieOptions(expiresAt, "production", "https://example.com"),
+    ).toMatchObject({
       httpOnly: true,
       sameSite: "lax",
       secure: true,
       path: "/",
       expires: expiresAt,
     });
-    expect(getClearSessionCookieOptions("production")).toMatchObject({
+    expect(
+      getClearSessionCookieOptions("production", "https://example.com"),
+    ).toMatchObject({
       httpOnly: true,
       sameSite: "lax",
       secure: true,
@@ -73,11 +78,31 @@ describe("session cookie options", () => {
     });
   });
 
+  it("allows session cookies over HTTP private production deployments", () => {
+    const expiresAt = new Date("2026-05-28T10:00:00.000Z");
+
+    expect(
+      getSessionCookieOptions(
+        expiresAt,
+        "production",
+        "http://127.0.0.1:3000",
+      ).secure,
+    ).toBe(false);
+    expect(
+      getClearSessionCookieOptions("production", "http://example.com").secure,
+    ).toBe(false);
+  });
+
   it("does not force secure cookies outside production", () => {
     const expiresAt = new Date("2026-05-28T10:00:00.000Z");
 
     expect(getSessionCookieOptions(expiresAt, "test").secure).toBe(false);
     expect(getClearSessionCookieOptions("test").secure).toBe(false);
+  });
+
+  it("falls back to secure cookies when production base URL is missing or invalid", () => {
+    expect(shouldUseSecureCookies("production", "")).toBe(true);
+    expect(shouldUseSecureCookies("production", "not-a-url")).toBe(true);
   });
 });
 

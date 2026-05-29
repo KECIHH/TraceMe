@@ -62,11 +62,12 @@ export async function setSessionCookie(token: string, expiresAt: Date) {
 export function getSessionCookieOptions(
   expiresAt: Date,
   nodeEnv = process.env.NODE_ENV,
+  appBaseUrl = process.env.APP_BASE_URL,
 ) {
   return {
     httpOnly: true,
     sameSite: SESSION_COOKIE_SAME_SITE,
-    secure: nodeEnv === "production",
+    secure: shouldUseSecureCookies(nodeEnv, appBaseUrl),
     path: "/",
     expires: expiresAt,
   } as const;
@@ -78,14 +79,36 @@ export async function clearSessionCookie() {
   cookieStore.set(SESSION_COOKIE_NAME, "", getClearSessionCookieOptions());
 }
 
-export function getClearSessionCookieOptions(nodeEnv = process.env.NODE_ENV) {
+export function getClearSessionCookieOptions(
+  nodeEnv = process.env.NODE_ENV,
+  appBaseUrl = process.env.APP_BASE_URL,
+) {
   return {
     httpOnly: true,
     sameSite: SESSION_COOKIE_SAME_SITE,
-    secure: nodeEnv === "production",
+    secure: shouldUseSecureCookies(nodeEnv, appBaseUrl),
     path: "/",
     maxAge: 0,
   } as const;
+}
+
+export function shouldUseSecureCookies(
+  nodeEnv = process.env.NODE_ENV,
+  appBaseUrl = process.env.APP_BASE_URL,
+) {
+  if (nodeEnv !== "production") {
+    return false;
+  }
+
+  if (!appBaseUrl) {
+    return true;
+  }
+
+  try {
+    return new URL(appBaseUrl).protocol === "https:";
+  } catch {
+    return true;
+  }
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
