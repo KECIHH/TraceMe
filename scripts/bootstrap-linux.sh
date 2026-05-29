@@ -18,6 +18,8 @@ SWAP_FILE="${TRACEME_SWAP_FILE:-/swapfile.traceme}"
 SWAP_SIZE_GB="${TRACEME_SWAP_SIZE_GB:-4}"
 MIN_SWAP_MB="${TRACEME_MIN_SWAP_MB:-2048}"
 SKIP_SWAP="${TRACEME_SKIP_SWAP:-false}"
+TRACEME_IMAGE="${TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main}"
+USE_LOCAL_BUILD="${TRACEME_USE_LOCAL_BUILD:-false}"
 
 need_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -127,7 +129,9 @@ ensure_swap() {
   swapon --show
 }
 
-build_and_start() {
+build_local_and_start() {
+  ensure_swap
+
   for attempt in $(seq 1 "$BUILD_RETRIES"); do
     echo "Docker build/start attempt ${attempt}/${BUILD_RETRIES} ..."
 
@@ -145,6 +149,31 @@ build_and_start() {
   done
 
   show_build_network_help
+  exit 1
+}
+
+pull_and_start() {
+  echo "Pulling prebuilt TraceMe image: ${TRACEME_IMAGE}"
+
+  if docker pull "$TRACEME_IMAGE"; then
+    docker compose up -d --no-build
+    return
+  fi
+
+  cat >&2 <<EOF_PULL
+
+Could not pull the prebuilt image: ${TRACEME_IMAGE}
+
+This usually means the GitHub Actions image build has not finished yet, or the
+GHCR package is not public. Wait a few minutes and rerun this command:
+
+  cd "$INSTALL_DIR" && bash scripts/bootstrap-linux.sh
+
+If you intentionally want to build on this server, run:
+
+  TRACEME_USE_LOCAL_BUILD=true bash scripts/bootstrap-linux.sh
+
+EOF_PULL
   exit 1
 }
 
@@ -192,6 +221,7 @@ INITIAL_ADMIN_USERNAME="${ADMIN_USERNAME}"
 INITIAL_ADMIN_PASSWORD="${admin_password}"
 TRACEME_BIND="${TRACEME_BIND}"
 TRACEME_PORT="${TRACEME_PORT}"
+TRACEME_IMAGE="${TRACEME_IMAGE}"
 NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY}"
 ALPINE_REPOSITORY_MIRROR="${ALPINE_REPOSITORY_MIRROR}"
 BUILD_NODE_OPTIONS="${BUILD_NODE_OPTIONS}"
@@ -240,11 +270,14 @@ fi
 ensure_env_value "NPM_CONFIG_REGISTRY" "$NPM_CONFIG_REGISTRY" ".env"
 ensure_env_value "ALPINE_REPOSITORY_MIRROR" "$ALPINE_REPOSITORY_MIRROR" ".env"
 ensure_env_value "BUILD_NODE_OPTIONS" "$BUILD_NODE_OPTIONS" ".env"
+ensure_env_value "TRACEME_IMAGE" "$TRACEME_IMAGE" ".env"
 
-ensure_swap
-
-echo "Building and starting TraceMe ..."
-build_and_start
+echo "Starting TraceMe ..."
+if [ "$USE_LOCAL_BUILD" = "true" ]; then
+  build_local_and_start
+else
+  pull_and_start
+fi
 
 wait_for_health
 

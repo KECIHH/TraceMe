@@ -35,7 +35,7 @@ http://localhost:3000/api/health
 
 ### 一条命令安装
 
-脚本会自动完成 clone/pull、生成 `.env`、构建镜像、启动容器和初始化管理员。需要先安装 Git、Docker 和 Docker Compose v2。
+脚本会自动完成 clone/pull、生成 `.env`、拉取预构建镜像、启动容器和初始化管理员。需要先安装 Git、Docker 和 Docker Compose v2。
 
 Linux / 云服务器：
 
@@ -62,6 +62,8 @@ http://127.0.0.1:3000
 - `TRACEME_DIR`：安装目录，默认 `~/traceme`。
 - `TRACEME_PORT`：宿主机端口，默认 `3000`。
 - `TRACEME_BIND`：宿主机监听地址，默认 `127.0.0.1`。
+- `TRACEME_IMAGE`：预构建 Docker 镜像，默认 `ghcr.io/kecihh/traceme:main`。
+- `TRACEME_USE_LOCAL_BUILD=true`：不拉预构建镜像，改为在服务器本地构建。
 - `APP_BASE_URL`：浏览器访问地址，默认 `http://127.0.0.1:3000`。
 - `INITIAL_ADMIN_USERNAME`：初始管理员用户名，默认 `admin`。
 - `SEED_EXAMPLE_TRIP`：是否创建示例旅行，默认 `true`。
@@ -85,15 +87,15 @@ PowerShell：
 $env:TRACEME_DIR="C:\traceme"; $env:TRACEME_PORT="8080"; $env:TRACEME_BIND="0.0.0.0"; $env:APP_BASE_URL="http://your-server-ip:8080"; irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
 ```
 
-如果仓库是私有仓库，公开 raw 链接可能无法直接访问。可以先在目标机器登录 GitHub 或改用带权限的 `TRACEME_REPO`，也可以手动 clone 后执行下面的手动部署命令。
+如果仓库是私有仓库，公开 raw 链接或 GHCR 镜像可能无法直接访问。可以先在目标机器登录 GitHub / GHCR，改用带权限的 `TRACEME_REPO`，或设置 `TRACEME_USE_LOCAL_BUILD=true` 在服务器本地构建。
 
 ### 手动部署
 
 编辑 `.env`，替换默认密码和密钥后执行：
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose pull
+docker compose up -d --no-build
 docker compose exec travel-planner node scripts/seed-admin.mjs
 ```
 
@@ -222,7 +224,7 @@ Docker Compose 使用三个 volume：
 - Playwright 缺浏览器：执行 `npx playwright install chromium`。
 - Docker 启动失败：检查 `SESSION_SECRET` 和 `INITIAL_ADMIN_PASSWORD` 是否仍是默认值。
 - Docker 构建出现 `short read` / `unexpected EOF`：通常是服务器拉取 Docker Hub 基础镜像时网络中断。先重试同一条一键部署命令；如果仍失败，执行 `cd /root/traceme && docker builder prune -f && docker image rm node:lts-alpine || true` 后再重试。阿里云服务器建议配置 Docker 镜像加速器后重启 Docker。
-- 服务器构建时卡死或只能强制重启：通常是 ECS 内存不足且没有 swap。一键脚本会自动创建 `/swapfile.traceme`，并关闭 Docker BuildKit 并行构建；建议 1 核 1G 机器至少保留 4GB swap。
+- 服务器构建时卡死或只能强制重启：通常是 ECS 内存不足。一键脚本默认拉取 GitHub Actions 预构建镜像，不在服务器构建；只有 `TRACEME_USE_LOCAL_BUILD=true` 时才会创建 `/swapfile.traceme` 并本地构建。
 - 上传失败：检查文件扩展名、MIME type、文件大小和 `storage/uploads` 写权限。
 - 备份失败：检查 SQLite 数据库文件是否存在，`storage/backups` 是否可写。
 - 远程访问失败：默认只监听远程服务器的 `127.0.0.1`，需要 SSH 隧道或私有网络。

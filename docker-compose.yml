@@ -2,6 +2,7 @@ name: traceme
 
 services:
   travel-planner:
+    image: ${TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main}
     build:
       context: .
       args:

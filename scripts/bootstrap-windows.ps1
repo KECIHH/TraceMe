@@ -11,6 +11,8 @@ $SeedExampleTrip = if ($env:SEED_EXAMPLE_TRIP) { $env:SEED_EXAMPLE_TRIP } else {
 $BuildRetries = if ($env:TRACEME_BUILD_RETRIES) { [int]$env:TRACEME_BUILD_RETRIES } else { 3 }
 $NpmConfigRegistry = if ($env:NPM_CONFIG_REGISTRY) { $env:NPM_CONFIG_REGISTRY } else { "https://registry.npmmirror.com" }
 $AlpineRepositoryMirror = if ($env:ALPINE_REPOSITORY_MIRROR) { $env:ALPINE_REPOSITORY_MIRROR } else { "https://mirrors.aliyun.com/alpine" }
+$TraceMeImage = if ($env:TRACEME_IMAGE) { $env:TRACEME_IMAGE } else { "ghcr.io/kecihh/traceme:main" }
+$UseLocalBuild = if ($env:TRACEME_USE_LOCAL_BUILD) { $env:TRACEME_USE_LOCAL_BUILD } else { "false" }
 
 function Require-Command {
   param([string]$Name)
@@ -110,6 +112,27 @@ function Start-TraceMeContainer {
   exit 1
 }
 
+function Start-PrebuiltTraceMeContainer {
+  Write-Host "Pulling prebuilt TraceMe image: $TraceMeImage"
+  docker pull $TraceMeImage
+  if ($LASTEXITCODE -eq 0) {
+    docker compose up -d --no-build
+    if ($LASTEXITCODE -eq 0) {
+      return
+    }
+  }
+
+  Write-Host ""
+  Write-Host "Could not pull or start the prebuilt image: $TraceMeImage" -ForegroundColor Red
+  Write-Host "The GitHub Actions image build may still be running, or the GHCR package may not be public."
+  Write-Host "Wait a few minutes and rerun this command:"
+  Write-Host "  cd `"$InstallDir`"; .\scripts\bootstrap-windows.ps1"
+  Write-Host ""
+  Write-Host "To build locally instead, run:"
+  Write-Host "  `$env:TRACEME_USE_LOCAL_BUILD=`"true`"; .\scripts\bootstrap-windows.ps1"
+  exit 1
+}
+
 function Read-EnvValue {
   param(
     [string]$Path,
@@ -152,6 +175,7 @@ INITIAL_ADMIN_USERNAME="$AdminUsername"
 INITIAL_ADMIN_PASSWORD="$AdminPassword"
 TRACEME_BIND="$TraceMeBind"
 TRACEME_PORT="$TraceMePort"
+TRACEME_IMAGE="$TraceMeImage"
 NPM_CONFIG_REGISTRY="$NpmConfigRegistry"
 ALPINE_REPOSITORY_MIRROR="$AlpineRepositoryMirror"
 
@@ -200,9 +224,14 @@ if (-not (Test-Path -LiteralPath ".env")) {
 
 Ensure-EnvValue -Path ".env" -Key "NPM_CONFIG_REGISTRY" -Value $NpmConfigRegistry
 Ensure-EnvValue -Path ".env" -Key "ALPINE_REPOSITORY_MIRROR" -Value $AlpineRepositoryMirror
+Ensure-EnvValue -Path ".env" -Key "TRACEME_IMAGE" -Value $TraceMeImage
 
-Write-Host "Building and starting TraceMe ..."
-Start-TraceMeContainer
+Write-Host "Starting TraceMe ..."
+if ($UseLocalBuild -eq "true") {
+  Start-TraceMeContainer
+} else {
+  Start-PrebuiltTraceMeContainer
+}
 
 Wait-ForHealth
 

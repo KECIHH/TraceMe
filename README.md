@@ -109,7 +109,7 @@ npm run db:deploy
 
 ## 部署方式
 
-本地 PC 或云服务器推荐使用 Docker Compose。最快方式是一条命令拉取 GitHub 仓库、生成 `.env`、构建镜像、启动服务并创建初始管理员。
+本地 PC 或云服务器推荐使用 Docker Compose。最快方式是一条命令拉取 GitHub 仓库、生成 `.env`、拉取预构建镜像、启动服务并创建初始管理员。
 
 Linux / 云服务器：
 
@@ -145,8 +145,8 @@ $env:TRACEME_DIR="C:\traceme"; $env:TRACEME_PORT="8080"; $env:TRACEME_BIND="0.0.
 如果已经克隆了项目，也可以手动部署：
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose pull
+docker compose up -d --no-build
 docker compose exec travel-planner node scripts/seed-admin.mjs
 ```
 

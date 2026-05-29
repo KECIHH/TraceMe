@@ -16,6 +16,7 @@ describe("private deployment configuration", () => {
     const compose = readProjectFile("docker-compose.yml");
 
     expect(compose).toContain("travel-planner:");
+    expect(compose).toContain("image: ${TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main}");
     expect(compose).toContain("ALPINE_REPOSITORY_MIRROR:");
     expect(compose).toContain("BUILD_NODE_OPTIONS:");
     expect(compose).toContain("NPM_CONFIG_REGISTRY:");
@@ -60,6 +61,8 @@ describe("private deployment configuration", () => {
     const windowsBootstrap = readProjectFile("scripts/bootstrap-windows.ps1");
 
     expect(linuxBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
+    expect(linuxBootstrap).toContain("TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main");
+    expect(linuxBootstrap).toContain("docker compose up -d --no-build");
     expect(linuxBootstrap).toContain("ensure_swap");
     expect(linuxBootstrap).toContain("DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0");
     expect(linuxBootstrap).toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker compose build travel-planner");
@@ -68,6 +71,8 @@ describe("private deployment configuration", () => {
     expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
 
     expect(windowsBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
+    expect(windowsBootstrap).toContain("ghcr.io/kecihh/traceme:main");
+    expect(windowsBootstrap).toContain("docker compose up -d --no-build");
     expect(windowsBootstrap).toContain("docker compose up -d --build");
     expect(windowsBootstrap).toContain("seed-admin.mjs");
     expect(windowsBootstrap).toContain('"127.0.0.1"');
