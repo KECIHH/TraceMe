@@ -3,6 +3,13 @@ import { access } from "node:fs/promises";
 import type { Document, DocumentType, Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import {
+  formatDisplayDate,
+  formatDisplayDateTime,
+  formatDisplayFileSize,
+  formatEmptyValue,
+} from "@/lib/display-format";
 import {
   DOCUMENT_TYPE_OPTIONS,
   formatFileSize,
@@ -87,7 +94,7 @@ export default async function DocumentsPage({
       <Notice error={notice.error} message={notice.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Documents</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">文件票据</p>
         <h1 className="mt-2 text-3xl font-semibold">文件票据</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           统一管理机票、酒店订单、保险单、签证文件和付款凭证。文件保存在
@@ -142,9 +149,12 @@ export default async function DocumentsPage({
                 <option value="false">仅非敏感</option>
               </select>
             </label>
-            <button className={secondaryButtonClassName} type="submit">
+            <SubmitButton
+              className={secondaryButtonClassName}
+              pendingLabel="筛选中..."
+            >
               筛选
-            </button>
+            </SubmitButton>
           </form>
         </div>
 
@@ -205,11 +215,14 @@ function DocumentCard({
           </div>
 
           <dl className="grid gap-2 text-sm text-[#5d6972] sm:grid-cols-2 lg:grid-cols-3">
-            <Info label="原始文件名" value={document.originalFileName ?? "未记录"} />
-            <Info label="文件大小" value={formatFileSize(document.fileSize)} />
+            <Info
+              label="原始文件名"
+              value={formatEmptyValue(document.originalFileName)}
+            />
+            <Info label="文件大小" value={formatDisplayFileSize(document.fileSize)} />
             <Info label="关联日期" value={formatDate(document.relatedDate)} />
             <Info label="上传时间" value={formatDateTime(document.createdAt)} />
-            <Info label="MIME type" value={document.mimeType ?? "未记录"} />
+            <Info label="MIME type" value={formatEmptyValue(document.mimeType)} />
             <Info label="存储状态" value={document.fileMissing ? "文件缺失" : "正常"} />
           </dl>
 
@@ -345,9 +358,9 @@ function DocumentForm({
       </label>
 
       <div>
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -392,17 +405,11 @@ async function fileExists(storedFileName: string): Promise<boolean> {
 }
 
 function formatDate(date: Date | null): string {
-  return date ? date.toLocaleDateString("zh-CN") : "未设置";
+  return formatDisplayDate(date);
 }
 
 function formatDateTime(date: Date): string {
-  return date.toLocaleString("zh-CN", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
+  return formatDisplayDateTime(date);
 }
 
 const inputClassName =

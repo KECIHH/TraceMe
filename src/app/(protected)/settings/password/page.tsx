@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Notice } from "@/app/(protected)/trips/[id]/module-nav";
+import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth/session";
 
 import { changePasswordAction } from "../actions";
@@ -77,12 +78,12 @@ export default async function PasswordPage({ searchParams }: PasswordPageProps) 
           </div>
 
           <div>
-            <button
+            <SubmitButton
               className="rounded-md bg-[#9b2f1f] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#812717]"
-              type="submit"
+              pendingLabel="更新中..."
             >
               更新密码
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

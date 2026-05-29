@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     <section className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Dashboard</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">工作台</p>
           <h1 className="mt-2 text-3xl font-semibold">旅行工作台</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
             这里集中展示最近更新和即将出发的旅行，方便你快速回到规划现场。

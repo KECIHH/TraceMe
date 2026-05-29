@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayDate, formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   findMatchingRouteWeightPreset,
@@ -16,7 +18,6 @@ import {
   getTransportStatusTone,
   parseStoredRouteWeights,
 } from "@/lib/routes";
-import { toDateInputValue } from "@/lib/trip-management";
 
 import { Notice, TripModuleNav } from "../module-nav";
 import { createRoutePlanAction } from "./actions";
@@ -61,7 +62,7 @@ export default async function RoutesPage({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Routes</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">交通方案</p>
           <h1 className="mt-2 text-3xl font-semibold">交通方案管理</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
             手动录入路线规划和候选交通方案，按时间、费用、舒适度、中转和风险计算推荐分。
@@ -117,7 +118,7 @@ export default async function RoutesPage({
                       {routePlan.fromName} → {routePlan.toName}
                     </p>
                     <p className="mt-2 text-sm text-[#5d6972]">
-                      出发日期：{toDateInputValue(routePlan.departDate) || "未设置"} · 权重：
+                      出发日期：{formatDisplayDate(routePlan.departDate)} · 权重：
                       {preset?.label ?? "自定义权重"}
                     </p>
                   </div>
@@ -142,7 +143,7 @@ export default async function RoutesPage({
                         ? `${getTransportModeLabel(selectedOption.mode)} · ${
                             selectedScore?.score ?? "-"
                           } 分`
-                        : "未选择"
+                        : formatEmptyValue(null)
                     }
                   />
                 </div>
@@ -208,9 +209,9 @@ function RoutePlanForm({
         <textarea className={`${inputClassName} min-h-24 resize-y`} name="notes" />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

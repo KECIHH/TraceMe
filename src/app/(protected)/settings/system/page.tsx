@@ -1,7 +1,9 @@
 import Link from "next/link";
 
 import { Notice } from "@/app/(protected)/trips/[id]/module-nav";
+import { SubmitButton } from "@/components/submit-button";
 import { requireUser } from "@/lib/auth/session";
+import { formatDisplayDateTime, formatEmptyValue } from "@/lib/display-format";
 import { formatBytes, getSystemOverview } from "@/lib/settings/system";
 import { isAiEnabledByUserSetting } from "@/server/services/ai/settings";
 
@@ -36,19 +38,19 @@ export default async function SystemPage({ searchParams }: SystemPageProps) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">基础信息</h2>
           <form action={refreshSystemStatusAction}>
-            <button
+            <SubmitButton
               className="rounded-md border border-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f2]"
-              type="submit"
+              pendingLabel="计算中..."
             >
               重新计算统计
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <Info label="应用名称" value={system.appName} />
           <Info label="应用版本" value={system.appVersion} />
           <Info label="Node 环境" value={system.nodeEnv} />
-          <Info label="当前时间" value={system.currentTime.toLocaleString("zh-CN")} />
+          <Info label="当前时间" value={formatDisplayDateTime(system.currentTime)} />
           <Info label="数据库类型" value={system.databaseType} />
           <Info
             label="数据库连接状态"
@@ -70,7 +72,11 @@ export default async function SystemPage({ searchParams }: SystemPageProps) {
           <Info label="备份文件总大小" value={formatBytes(system.backupBytes)} />
           <Info
             label="最近备份时间"
-            value={system.recentBackupAt?.toLocaleString("zh-CN") ?? "暂无"}
+            value={
+              system.recentBackupAt
+                ? formatDisplayDateTime(system.recentBackupAt)
+                : formatEmptyValue(null)
+            }
           />
           <Info
             label="文件记录总大小"

@@ -59,7 +59,7 @@ export default async function AiAssistantPage({
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">AI Assistant</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">AI 助手</p>
           <h1 className="mt-2 text-3xl font-semibold">AI 助手</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5d6972]">
             用于生成攻略、行程、清单、美食、住宿、交通、注意事项和复盘草稿。结果只能作为起点，事实信息必须人工核验。
@@ -84,7 +84,7 @@ export default async function AiAssistantPage({
       <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#2f6f73]">History</p>
+            <p className="text-sm font-semibold text-[#2f6f73]">历史记录</p>
             <h2 className="mt-1 text-xl font-semibold">历史生成记录</h2>
           </div>
           <p className="text-sm text-[#66737b]">只保存脱敏摘要，不保存完整敏感原文。</p>

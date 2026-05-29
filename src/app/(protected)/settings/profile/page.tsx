@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
 import { Notice } from "@/app/(protected)/trips/[id]/module-nav";
+import { SubmitButton } from "@/components/submit-button";
 
 import { updateProfileAction } from "../actions";
 
@@ -53,12 +54,11 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </label>
 
           <div>
-            <button
+            <SubmitButton
               className="rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62]"
-              type="submit"
             >
               保存个人资料
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>

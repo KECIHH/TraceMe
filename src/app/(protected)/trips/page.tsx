@@ -1,6 +1,8 @@
 import type { Prisma, TripStatus } from "@prisma/client";
 import Link from "next/link";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   formatBudget,
@@ -50,7 +52,7 @@ export default async function TripsPage({ searchParams }: TripsPageProps) {
     <section className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Trips</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">旅行计划</p>
           <h1 className="mt-2 text-3xl font-semibold">旅行计划</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
             管理你的旅行灵感、日期、预算和状态，后续模块都会围绕旅行计划展开。
@@ -95,12 +97,12 @@ export default async function TripsPage({ searchParams }: TripsPageProps) {
           <option value="asc">出发日期升序</option>
           <option value="desc">出发日期降序</option>
         </select>
-        <button
+        <SubmitButton
           className="rounded-md border border-[#2f6f73] px-4 py-2 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f1]"
-          type="submit"
+          pendingLabel="筛选中..."
         >
           筛选
-        </button>
+        </SubmitButton>
       </form>
 
       {trips.length === 0 ? (
@@ -152,7 +154,7 @@ export default async function TripsPage({ searchParams }: TripsPageProps) {
                 />
                 <Info
                   label="出发城市"
-                  value={trip.homeCity || "未设置"}
+                  value={formatEmptyValue(trip.homeCity)}
                 />
                 <Info
                   label="距离出发"

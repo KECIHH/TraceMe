@@ -1,6 +1,12 @@
 import type { Prisma, StayBookingStatus } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import {
+  formatDisplayDate,
+  formatDisplayMoney,
+  formatEmptyValue,
+} from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   getStayBookingStatusLabel,
@@ -50,7 +56,7 @@ export default async function StaysPage({
       <Notice error={queryParams.error} message={queryParams.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Stay</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">住宿</p>
         <h1 className="mt-2 text-3xl font-semibold">住宿管理</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           单独整理酒店、民宿和住宿订单，记录入住退房、总价、早餐、行李寄存和取消政策。
@@ -90,7 +96,7 @@ export default async function StaysPage({
                   <div>
                     <h2 className="text-xl font-semibold">{place.name}</h2>
                     <p className="mt-1 text-sm text-[#5d6972]">
-                      {place.address || "未设置地址"}
+                      {formatEmptyValue(place.address)}
                     </p>
                   </div>
                   <span className={bookingStatusClassName(bookingStatus)}>
@@ -106,10 +112,10 @@ export default async function StaysPage({
                     value={
                       detail?.totalCost
                         ? formatAmount(detail.totalCost, currency)
-                        : "未记录"
+                        : formatEmptyValue(null)
                     }
                   />
-                  <Info label="电话" value={place.phone || "未记录"} />
+                  <Info label="电话" value={formatEmptyValue(place.phone)} />
                   <Info
                     label="早餐"
                     value={detail?.breakfastIncluded ? "含早餐" : "未含/未确认"}
@@ -120,11 +126,11 @@ export default async function StaysPage({
                   />
                   <Info
                     label="订单号"
-                    value={detail?.bookingReference || "未记录"}
+                    value={formatEmptyValue(detail?.bookingReference)}
                   />
                   <Info
                     label="取消政策"
-                    value={detail?.cancellationPolicy || "未记录"}
+                    value={formatEmptyValue(detail?.cancellationPolicy)}
                   />
                 </dl>
 
@@ -281,9 +287,9 @@ function StayForm({
         />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -324,7 +330,7 @@ function formatAmount(
   amount: Prisma.Decimal | number | string,
   currency: string,
 ): string {
-  return `${currency} ${String(amount)}`;
+  return formatDisplayMoney(amount, currency);
 }
 
 function bookingStatusClassName(status: StayBookingStatus): string {
@@ -340,15 +346,7 @@ function bookingStatusClassName(status: StayBookingStatus): string {
 }
 
 function formatDate(date: Date | null | undefined): string {
-  if (!date) {
-    return "未记录";
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 const inputClassName =

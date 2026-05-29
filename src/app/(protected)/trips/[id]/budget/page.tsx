@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayDate, formatEmptyValue } from "@/lib/display-format";
 import {
   BUDGET_CATEGORIES,
   calculateBudgetUsagePercent,
@@ -102,7 +104,7 @@ export default async function BudgetPage({
       <Notice error={queryParams.error} message={queryParams.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Budget</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">预算</p>
         <h1 className="mt-2 text-3xl font-semibold">预算与花销</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           记录总预算、分类预算和实际支出。汇率仅为记录用途，请以实际支付为准。
@@ -115,7 +117,7 @@ export default async function BudgetPage({
           value={
             trip.budgetAmount
               ? formatMoney(Number(trip.budgetAmount), baseCurrency)
-              : "未设置"
+              : formatEmptyValue(null)
           }
         />
         <SummaryCard
@@ -126,7 +128,7 @@ export default async function BudgetPage({
           label="剩余预算（已折算）"
           value={
             remainingBudget === null
-              ? "未设置"
+              ? formatEmptyValue(null)
               : formatMoney(remainingBudget, baseCurrency)
           }
         />
@@ -185,9 +187,9 @@ export default async function BudgetPage({
             </Field>
           ))}
           <div className="md:col-span-2">
-            <button className={primaryButtonClassName} type="submit">
+            <SubmitButton className={primaryButtonClassName}>
               保存预算
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -441,9 +443,9 @@ function ExpenseForm({
         />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -531,15 +533,7 @@ function formatConvertedAmount(
 }
 
 function formatDate(date: Date | null): string {
-  if (!date) {
-    return "未记录日期";
-  }
-
-  return new Intl.DateTimeFormat("zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
+  return formatDisplayDate(date);
 }
 
 function formatSplitWith(splitWith: Prisma.JsonValue | null | undefined): string {

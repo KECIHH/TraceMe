@@ -24,8 +24,9 @@ const e2eEnv = {
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  fullyParallel: true,
+  fullyParallel: false,
   reporter: "list",
+  workers: 1,
   use: {
     baseURL: e2eBaseUrl,
     trace: "on-first-retry",

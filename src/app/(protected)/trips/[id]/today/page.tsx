@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import {
+  EmptyState,
+  secondaryButtonClassName,
+  StatusPill,
+} from "@/components/ui";
+import {
+  formatDisplayDate,
+  formatDisplayTime,
+  formatEmptyValue,
+} from "@/lib/display-format";
 import {
   analyzeItineraryDay,
   formatDateTitle,
-  formatTimeInputValue,
   formatTimeRange,
   getItineraryItemTypeLabel,
   getItineraryPriorityLabel,
@@ -87,17 +97,17 @@ export default async function TodayPage({
       <TripModuleNav active="today" tripId={trip.id} tripTitle={trip.title} />
       <Notice error={queryParams.error} message={queryParams.message} />
 
-      <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-[#2f6f73]">今日</p>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="rounded-lg border border-[#b8d8ca] bg-white p-5 shadow-sm">
+        <p className="text-sm font-semibold text-[#2f6f73]">今日模式</p>
+        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-3xl font-semibold">今日模式</h1>
-            <p className="mt-2 text-sm text-[#5d6972]">
-              当前时间 {formatTimeInputValue(now)}
+            <h1 className="text-3xl font-semibold">{trip.title}</h1>
+            <p className="mt-2 text-sm leading-6 text-[#5d6972]">
+              {formatDisplayDate(now)} · 当前时间 {formatDisplayTime(now)}
             </p>
           </div>
           <Link
-            className="w-fit rounded-md border border-[#2f6f73] px-4 py-2 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f1]"
+            className={secondaryButtonClassName}
             href={`/trips/${trip.id}/itinerary`}
           >
             返回行程日历
@@ -106,12 +116,12 @@ export default async function TodayPage({
       </div>
 
       {!fullDisplayDay ? (
-        <div className="rounded-lg border border-dashed border-[#b8c8c4] bg-white p-8 text-center">
-          <h2 className="text-xl font-semibold">还没有可查看的行程日期</h2>
-          <p className="mt-3 text-sm text-[#5d6972]">
-            先在行程日历里生成日期并添加当天安排。
-          </p>
-        </div>
+        <EmptyState
+          actionHref={`/trips/${trip.id}/itinerary`}
+          actionLabel="生成行程日期"
+          description="先在行程日历里生成日期并添加当天安排，之后这里会自动显示最接近今天的一天。"
+          title="还没有可查看的今日行程"
+        />
       ) : (
         <>
           <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
@@ -125,11 +135,11 @@ export default async function TodayPage({
             <h2 className="mt-2 text-2xl font-semibold">
               {formatDateTitle(fullDisplayDay.date)}
             </h2>
-            <p className="mt-2 text-sm text-[#5d6972]">
-              {[fullDisplayDay.city, fullDisplayDay.theme, fullDisplayDay.weatherSummary]
-                .filter(Boolean)
-                .join(" · ") || "今天信息待补充"}
-            </p>
+            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+              <TodayInfo label="今日城市" value={fullDisplayDay.city} />
+              <TodayInfo label="主题" value={fullDisplayDay.theme} />
+              <TodayInfo label="天气" value={fullDisplayDay.weatherSummary} />
+            </dl>
             {alerts.length > 0 ? (
               <p className="mt-3 rounded-md border border-[#f0d39b] bg-[#fff9e8] px-3 py-2 text-sm text-[#73530f]">
                 今天有 {alerts.length} 条提醒，请留意节奏。
@@ -137,8 +147,8 @@ export default async function TodayPage({
             ) : null}
           </div>
 
-          <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-[#2f6f73]">下一项</p>
+          <section className="rounded-lg border border-[#2f6f73] bg-[#fbfffd] p-5 shadow-sm">
+            <p className="text-sm font-semibold text-[#2f6f73]">下一项行程</p>
             {nextItem ? (
               <div className="mt-3">
                 <p className="text-sm font-semibold text-[#172026]">
@@ -149,83 +159,74 @@ export default async function TodayPage({
                   {getItineraryItemTypeLabel(nextItem.type)}
                   {nextItem.place ? ` · ${nextItem.place.name}` : ""}
                 </p>
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
                   <StatusButton
                     itemId={nextItem.id}
-                    label="已完成"
+                    label="一键标记完成"
                     status="DONE"
                     tripId={trip.id}
                   />
                   <StatusButton
                     itemId={nextItem.id}
-                    label="跳过"
+                    label="一键标记跳过"
                     status="SKIPPED"
                     tripId={trip.id}
                   />
                 </div>
               </div>
             ) : (
-              <p className="mt-3 text-sm text-[#5d6972]">
-                今天没有待处理的下一项。
+              <p className="mt-3 rounded-md bg-white px-4 py-5 text-sm text-[#5d6972]">
+                今天没有待处理的下一项，可以慢慢走，或去行程日历补充安排。
               </p>
             )}
-          </section>
-
-          <section className="grid gap-3 sm:grid-cols-2">
-            <Link
-              className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm transition hover:border-[#2f6f73]"
-              href={`/trips/${trip.id}/places`}
-            >
-              <p className="text-sm font-semibold text-[#2f6f73]">
-                酒店/住宿信息
-              </p>
-              <p className="mt-2 text-sm text-[#5d6972]">
-                {lodgingItems[0]?.title ??
-                  trip.places[0]?.name ??
-                  "查看地点库中的住宿信息"}
-              </p>
-            </Link>
-            <Link
-              className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm transition hover:border-[#2f6f73]"
-              href={`/trips/${trip.id}/checklist`}
-            >
-              <p className="text-sm font-semibold text-[#2f6f73]">
-                文件票据/准备清单
-              </p>
-              <p className="mt-2 text-sm text-[#5d6972]">
-                {trip.documents[0]?.title ?? "查看票据、证件和准备清单"}
-              </p>
-            </Link>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xl font-semibold">今日全部行程</h2>
             {fullDisplayDay.items.length === 0 ? (
-              <p className="rounded-lg border border-[#d8d2c6] bg-white p-5 text-sm text-[#5d6972] shadow-sm">
-                这一天还没有行程项。
-              </p>
+              <EmptyState
+                actionHref={`/trips/${trip.id}/itinerary`}
+                actionLabel="添加今日行程"
+                description="今天暂时没有行程项，可以添加交通、餐饮、景点或住宿安排。"
+                title="暂无今日行程"
+              />
             ) : (
               fullDisplayDay.items.map((item) => (
                 <article
-                  className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm"
+                  className={[
+                    "rounded-lg border p-4 shadow-sm",
+                    item.status === "DONE"
+                      ? "border-[#d8d2c6] bg-white opacity-65"
+                      : item.status === "SKIPPED"
+                        ? "border-[#f0d39b] bg-[#fff9e8]"
+                        : "border-[#d8d2c6] bg-white",
+                  ].join(" ")}
                   data-testid="today-item-card"
                   key={item.id}
                 >
-                  <div className="flex gap-3">
-                    <div className="w-24 shrink-0 text-sm font-semibold text-[#172026]">
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <div className="shrink-0 text-sm font-semibold text-[#172026] sm:w-24">
                       {formatTimeRange(item.startTime, item.endTime)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap gap-2">
-                        <span className="rounded-full bg-[#edf4f1] px-2 py-1 text-xs font-medium text-[#2f6f73]">
+                        <StatusPill>
                           {getItineraryItemTypeLabel(item.type)}
-                        </span>
-                        <span className="rounded-full bg-[#fff7d6] px-2 py-1 text-xs font-medium text-[#6d5412]">
+                        </StatusPill>
+                        <StatusPill tone="warning">
                           {getItineraryPriorityLabel(item.priority)}
-                        </span>
-                        <span className="rounded-full bg-[#eef0f2] px-2 py-1 text-xs font-medium text-[#44515a]">
+                        </StatusPill>
+                        <StatusPill
+                          tone={
+                            item.status === "DONE"
+                              ? "success"
+                              : item.status === "SKIPPED"
+                                ? "warning"
+                                : "muted"
+                          }
+                        >
                           {getItineraryStatusLabel(item.status)}
-                        </span>
+                        </StatusPill>
                       </div>
                       <h3 className="mt-2 font-semibold">{item.title}</h3>
                       {item.place ? (
@@ -233,16 +234,16 @@ export default async function TodayPage({
                           {item.place.name}
                         </p>
                       ) : null}
-                      <div className="mt-3 flex flex-wrap gap-2">
+                      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
                         <StatusButton
                           itemId={item.id}
-                          label="已完成"
+                          label="一键标记完成"
                           status="DONE"
                           tripId={trip.id}
                         />
                         <StatusButton
                           itemId={item.id}
-                          label="跳过"
+                          label="一键标记跳过"
                           status="SKIPPED"
                           tripId={trip.id}
                         />
@@ -255,7 +256,71 @@ export default async function TodayPage({
           </section>
         </>
       )}
+
+      <section className="grid gap-3 sm:grid-cols-2">
+        <QuickLink
+          description={
+            lodgingItems[0]?.title ??
+            trip.places[0]?.name ??
+            "查看住宿清单和酒店地址"
+          }
+          href={`/trips/${trip.id}/stays`}
+          title="酒店/住宿入口"
+        />
+        <QuickLink
+          description={trip.documents[0]?.title ?? "查看票据、证件和订单文件"}
+          href={`/trips/${trip.id}/documents`}
+          title="文件票据入口"
+        />
+        <QuickLink
+          description="查看路线规划和候选交通方案"
+          href={`/trips/${trip.id}/routes`}
+          title="交通方案入口"
+        />
+        <QuickLink
+          description="查看攻略笔记、紧急备注和临时信息"
+          href={`/trips/${trip.id}/notes`}
+          title="紧急备注入口"
+        />
+      </section>
     </section>
+  );
+}
+
+function TodayInfo({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null;
+}) {
+  return (
+    <div className="rounded-md border border-[#e0d9cc] bg-[#fbfaf7] px-3 py-2">
+      <dt className="text-xs text-[#7a858c]">{label}</dt>
+      <dd className="mt-1 font-semibold text-[#34434c]">
+        {formatEmptyValue(value)}
+      </dd>
+    </div>
+  );
+}
+
+function QuickLink({
+  description,
+  href,
+  title,
+}: {
+  description: string;
+  href: string;
+  title: string;
+}) {
+  return (
+    <Link
+      className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm transition hover:border-[#2f6f73] hover:bg-[#f8fbfa]"
+      href={href}
+    >
+      <p className="text-sm font-semibold text-[#2f6f73]">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-[#5d6972]">{description}</p>
+    </Link>
   );
 }
 
@@ -280,12 +345,17 @@ function StatusButton({
 
   return (
     <form action={action}>
-      <button
-        className="rounded-md border border-[#cfd7d2] px-3 py-2 text-sm font-semibold text-[#34434c] transition hover:border-[#2f6f73] hover:text-[#2f6f73]"
-        type="submit"
+      <SubmitButton
+        className={[
+          "w-full rounded-md border px-3 py-2.5 text-sm font-semibold transition sm:w-auto",
+          status === "DONE"
+            ? "border-[#2f6f73] text-[#2f6f73] hover:bg-[#edf4f1]"
+            : "border-[#d49a42] text-[#7a4b12] hover:bg-[#fff8ec]",
+        ].join(" ")}
+        pendingLabel="处理中..."
       >
         {label}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

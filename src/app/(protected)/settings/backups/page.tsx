@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { SubmitButton } from "@/components/submit-button";
 import { formatBackupFileSize, listBackupFiles } from "@/lib/backup/files";
+import { formatDisplayDateTime } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import { Notice } from "@/app/(protected)/trips/[id]/module-nav";
 
@@ -50,12 +52,12 @@ export default async function BackupsPage({ searchParams }: BackupsPageProps) {
             />
           </label>
           <div>
-            <button
+            <SubmitButton
               className="rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62]"
-              type="submit"
+              pendingLabel="创建中..."
             >
               创建备份
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </section>
@@ -132,7 +134,7 @@ function BackupRecordCard({
             ) : null}
           </div>
           <dl className="mt-3 grid gap-2 text-sm text-[#5d6972] sm:grid-cols-3">
-            <Info label="创建时间" value={record.createdAt.toLocaleString("zh-CN")} />
+            <Info label="创建时间" value={formatDisplayDateTime(record.createdAt)} />
             <Info label="文件大小" value={formatBackupFileSize(record.fileSize)} />
             <Info label="状态" value={statusLabel(record.status)} />
           </dl>

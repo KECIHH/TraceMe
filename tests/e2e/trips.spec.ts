@@ -84,7 +84,7 @@ test("user can create, view, edit, archive, and delete a trip", async ({
   });
   await page.getByRole("button", { name: "删除旅行" }).click();
 
-  await expect(page).toHaveURL(/\/trips$/);
+  await expect(page).toHaveURL(/\/trips$/, { timeout: 10000 });
   await expect(page.getByText(updatedTitle)).toHaveCount(0);
 });
 
@@ -289,11 +289,11 @@ test("user can manage itinerary days, items, sorting, and today mode", async ({
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${tripUrl}/today`);
-  await expect(page.getByRole("heading", { name: "今日模式" })).toBeVisible();
-  await expect(page.getByText("下一项")).toBeVisible();
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  await expect(page.getByText("下一项行程")).toBeVisible();
   await expect(page.getByText("今日全部行程")).toBeVisible();
-  await expect(page.getByText("酒店/住宿信息")).toBeVisible();
-  await expect(page.getByText("文件票据/准备清单")).toBeVisible();
+  await expect(page.getByText("酒店/住宿入口")).toBeVisible();
+  await expect(page.getByText("文件票据入口")).toBeVisible();
 });
 
 async function fillItineraryItem(

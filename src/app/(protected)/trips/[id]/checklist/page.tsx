@@ -1,6 +1,7 @@
 import type { ChecklistStatus, Priority } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
 import { prisma } from "@/lib/prisma";
 import {
   calculateChecklistCompletion,
@@ -72,16 +73,16 @@ export default async function ChecklistPage({
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Checklist</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">准备清单</p>
           <h1 className="mt-2 text-3xl font-semibold">出发前准备清单</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
             分类整理证件、票据、药品、电子设备和通信事项，支持标记已准备或不需要。
           </p>
         </div>
         <form action={generateAction}>
-          <button className={primaryButtonClassName} type="submit">
+          <SubmitButton className={primaryButtonClassName} pendingLabel="生成中...">
             一键生成基础模板清单
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -106,9 +107,9 @@ export default async function ChecklistPage({
                 </option>
               ))}
             </select>
-            <button className={secondaryButtonClassName} type="submit">
+            <SubmitButton className={secondaryButtonClassName} pendingLabel="查看中...">
               查看
-            </button>
+            </SubmitButton>
           </form>
         </div>
         <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#eceff3]">
@@ -179,17 +180,17 @@ export default async function ChecklistPage({
 
                           return (
                             <form action={action} key={status.value}>
-                              <button
+                              <SubmitButton
                                 className={[
                                   "rounded-md border px-3 py-2 text-xs font-semibold transition",
                                   item.status === status.value
                                     ? "border-[#2f6f73] bg-[#edf4f1] text-[#2f6f73]"
                                     : "border-[#cfd7d2] text-[#34434c] hover:border-[#2f6f73]",
                                 ].join(" ")}
-                                type="submit"
+                                pendingLabel="更新中..."
                               >
                                 {status.label}
-                              </button>
+                              </SubmitButton>
                             </form>
                           );
                         })}
@@ -293,9 +294,9 @@ function ChecklistForm({
         <textarea className={`${inputClassName} min-h-24 resize-y`} defaultValue={item?.notes ?? ""} name="notes" />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

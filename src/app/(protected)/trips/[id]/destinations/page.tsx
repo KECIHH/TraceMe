@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayDate, formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import { toDateInputValue } from "@/lib/trip-management";
 
@@ -45,7 +47,7 @@ export default async function DestinationsPage({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Destinations</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">目的地</p>
           <h1 className="mt-2 text-3xl font-semibold">目的地管理</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
             为这次旅行拆分城市、国家或区域，并记录抵离日期、时区和坐标。
@@ -99,15 +101,15 @@ export default async function DestinationsPage({
                 </div>
 
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                  <Info label="时区" value={destination.timezone || "未设置"} />
-                  <Info label="到达" value={toDateInputValue(destination.arrivalDate) || "未设置"} />
-                  <Info label="离开" value={toDateInputValue(destination.departureDate) || "未设置"} />
+                  <Info label="时区" value={formatEmptyValue(destination.timezone)} />
+                  <Info label="到达" value={formatDisplayDate(destination.arrivalDate)} />
+                  <Info label="离开" value={formatDisplayDate(destination.departureDate)} />
                   <Info
                     label="坐标"
                     value={
                       destination.latitude !== null && destination.longitude !== null
                         ? `${destination.latitude}, ${destination.longitude}`
-                        : "未设置"
+                        : formatEmptyValue(null)
                     }
                   />
                 </dl>
@@ -197,9 +199,9 @@ function DestinationForm({
         <textarea className={`${inputClassName} min-h-24 resize-y`} defaultValue={destination?.notes ?? ""} name="notes" />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

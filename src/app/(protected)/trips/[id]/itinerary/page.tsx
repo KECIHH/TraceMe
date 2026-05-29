@@ -8,6 +8,8 @@ import type {
 } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayMoney, formatEmptyValue } from "@/lib/display-format";
 import {
   analyzeItineraryDay,
   BOOKING_STATUS_OPTIONS,
@@ -97,6 +99,7 @@ export default async function ItineraryPage({
 
   const generateAction = generateItineraryDaysAction.bind(null, trip.id);
   const syncAction = syncItineraryDaysAction.bind(null, trip.id);
+  const baseCurrency = trip.baseCurrency || "CNY";
   const rangeStart = trip.startDate ? startOfLocalDay(trip.startDate) : null;
   const rangeEnd = trip.endDate ? startOfLocalDay(trip.endDate) : null;
   const outOfRangeDays = trip.itineraryDays.filter(
@@ -114,7 +117,7 @@ export default async function ItineraryPage({
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-sm font-semibold text-[#2f6f73]">Itinerary</p>
+          <p className="text-sm font-semibold text-[#2f6f73]">行程日历</p>
           <h1 className="mt-2 text-3xl font-semibold">行程日历</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#5d6972]">
             按天安排景点、餐饮、交通和住宿，自动提示时间冲突、行程过密和转场过赶。
@@ -122,18 +125,18 @@ export default async function ItineraryPage({
         </div>
         <div className="flex flex-wrap gap-3">
           <form action={generateAction}>
-            <button
+            <SubmitButton
               className={primaryButtonClassName}
               data-testid="generate-itinerary-days"
-              type="submit"
+              pendingLabel="生成中..."
             >
               生成行程日期
-            </button>
+            </SubmitButton>
           </form>
           <form action={syncAction}>
-            <button className={secondaryButtonClassName} type="submit">
+            <SubmitButton className={secondaryButtonClassName} pendingLabel="同步中...">
               同步行程日期
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -146,7 +149,7 @@ export default async function ItineraryPage({
               ? `${formatDateInputValue(trip.startDate)} 至 ${formatDateInputValue(
                   trip.endDate,
                 )}`
-              : "待设置"
+              : formatEmptyValue(null)
           }
         />
         <SummaryCard label="已生成天数" value={`${trip.itineraryDays.length} 天`} />
@@ -228,9 +231,12 @@ export default async function ItineraryPage({
 
                   <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 xl:min-w-[520px]">
                     <MiniStat label="行程数量" value={`${items.length} 项`} />
-                    <MiniStat label="预计花费" value={formatMoney(dayCost)} />
+                    <MiniStat
+                      label="预计花费"
+                      value={formatMoney(dayCost, baseCurrency)}
+                    />
                     <MiniStat label="提醒数量" value={`${alerts.length} 条`} />
-                    <MiniStat label="城市" value={day.city || "未设置"} />
+                    <MiniStat label="城市" value={formatEmptyValue(day.city)} />
                   </div>
                 </div>
 
@@ -284,18 +290,18 @@ export default async function ItineraryPage({
                       />
                     </Field>
                     <div className="md:col-span-2">
-                      <button className={primaryButtonClassName} type="submit">
+                      <SubmitButton className={primaryButtonClassName}>
                         保存当天信息
-                      </button>
+                      </SubmitButton>
                     </div>
                   </form>
                 </details>
 
                 <div className="mt-5 flex flex-wrap gap-3">
                   <form action={sortAction}>
-                    <button className={secondaryButtonClassName} type="submit">
+                    <SubmitButton className={secondaryButtonClassName} pendingLabel="排序中...">
                       按开始时间排序
-                    </button>
+                    </SubmitButton>
                   </form>
                 </div>
 
@@ -307,6 +313,7 @@ export default async function ItineraryPage({
                   ) : (
                     items.map((item, index) => (
                       <ItineraryItemCard
+                        baseCurrency={baseCurrency}
                         canMoveDown={index < items.length - 1}
                         canMoveUp={index > 0}
                         item={item}
@@ -338,12 +345,14 @@ export default async function ItineraryPage({
 }
 
 function ItineraryItemCard({
+  baseCurrency,
   canMoveDown,
   canMoveUp,
   item,
   places,
   tripId,
 }: {
+  baseCurrency: string;
   canMoveDown: boolean;
   canMoveUp: boolean;
   item: ItineraryItemWithPlace;
@@ -404,11 +413,18 @@ function ItineraryItemCard({
           <h3 className="mt-2 text-lg font-semibold">{item.title}</h3>
           <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
             <Info label="地点" value={item.place?.name ?? "未关联"} />
-            <Info label="预估费用" value={formatMoney(item.costEstimate)} />
+            <Info
+              label="预估费用"
+              value={formatMoney(item.costEstimate, baseCurrency)}
+            />
             <Info label="预约" value={getBookingStatusLabel(item.bookingStatus)} />
             <Info
               label="预计时长"
-              value={item.durationMin ? `${item.durationMin} 分钟` : "未设置"}
+              value={
+                item.durationMin
+                  ? `${item.durationMin} 分钟`
+                  : formatEmptyValue(null)
+              }
             />
           </dl>
           {item.transportToNext ? (
@@ -442,14 +458,14 @@ function ItineraryItemCard({
             </button>
           </form>
           <form action={doneAction}>
-            <button className={smallButtonClassName} type="submit">
+            <SubmitButton className={smallButtonClassName} pendingLabel="更新中...">
               标记完成
-            </button>
+            </SubmitButton>
           </form>
           <form action={skippedAction}>
-            <button className={smallButtonClassName} type="submit">
+            <SubmitButton className={smallButtonClassName} pendingLabel="更新中...">
               标记跳过
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </div>
@@ -625,9 +641,9 @@ function ItineraryItemForm({
         />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -682,17 +698,17 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatMoney(value: Prisma.Decimal | number | null): string {
+function formatMoney(
+  value: Prisma.Decimal | number | null,
+  currency: string,
+): string {
   const amount = Number(value ?? 0);
 
   if (!amount) {
-    return "0";
+    return formatDisplayMoney(0, currency);
   }
 
-  return amount.toLocaleString("zh-CN", {
-    maximumFractionDigits: 2,
-    minimumFractionDigits: 0,
-  });
+  return formatDisplayMoney(amount, currency);
 }
 
 const inputClassName =

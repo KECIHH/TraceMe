@@ -1,37 +1,64 @@
 # Security
 
-TraceMe 当前定位为个人自用旅行规划网站，请按本地私有工具对待。
+TraceMe 按私有工具设计。它可以帮助整理旅行资料，但旅行计划、住宿、票据、证件、预算和备份都可能包含敏感信息，请不要把它当作公开网站直接暴露。
 
-## 使用边界
+## 私有部署原则
 
-- 不要公开部署到公网。
-- 不要上传真实敏感证件做测试，包括身份证、护照、签证、银行卡、保险单和完整票据。
-- 不要把 API Key、会话密钥、加密密钥写进代码或提交到 Git。
-- 不要把敏感文件、真实证件、私密行程、票据或备份文件发给 AI。
+- 默认只在本机、内网、VPN、Tailscale、ZeroTier 或 SSH 隧道中访问。
+- 不建议直接绑定公网 IP。
+- 如果必须公开部署，需要自行配置 HTTPS、反向代理、防火墙、强密码、监控、日志轮转、备份加密和访问审计。
+- 不要把 `.env`、SQLite 数据库、上传文件、备份文件提交到 Git 或上传到不可信网盘。
 
-## 配置建议
+## 登录安全
 
-- 使用 `.env.example` 创建本地 `.env`，并替换默认密钥和密码。
-- `storage/uploads`、`storage/backups`、SQLite 数据库文件都应保持在本地私有环境中。
-- Docker Compose 默认绑定 `127.0.0.1:3000`，不要改成 `0.0.0.0`，除非你已经完成反向代理、HTTPS、防火墙和强密码配置。
-- `SESSION_SECRET` 必须使用足够长的随机字符串。
-- `INITIAL_ADMIN_PASSWORD` 必须使用强密码；首次创建管理员后，后续应尽快通过改密功能轮换。
-- `OPENAI_API_KEY` 只放在 `.env` 或服务器密钥管理中，不要提交到 Git。
-
-## 已实现的安全边界
-
-- 生产环境 session cookie 使用 `secure`。
+- 密码使用 scrypt hash 存储，不保存明文密码。
+- 登录接口不会把 `passwordHash` 返回给前端。
+- session token 只保存 hash 到数据库。
 - session cookie 使用 `httpOnly` 和 `sameSite=lax`。
-- 登录接口返回用户信息时不返回 `passwordHash`。
+- 生产环境 cookie 使用 `secure`。
+- 修改密码后会清理其他会话。
+- 登录接口带有基础限流，E2E 可通过测试环境变量绕过。
+
+## 文件安全
+
 - 上传文件保存在 `storage/uploads`，不放入 `public`。
-- 文件下载走鉴权 API，不直接暴露真实存储路径。
-- 备份文件保存在 `storage/backups`，不放入 `public`。
-- `/api/health` 只返回基本状态、时间和版本，不返回密钥或数据库配置。
-- `.dockerignore` 排除 `.env`、本地数据库、上传文件和备份文件，避免进入镜像构建上下文。
-- 默认 Docker Compose 端口绑定为 `127.0.0.1:3000:3000`。
+- 下载必须经过鉴权 API，未登录无法下载文件。
+- 文件名会规范化，磁盘保存名使用随机 UUID。
+- 路径解析会拒绝 `..`、目录分隔符和非上传目录路径。
+- 允许的扩展名包括 PDF、JPG、PNG、WEBP、TXT、Markdown、DOCX、XLSX。
+- 阻止脚本、可执行文件、HTML、SVG、PHP、JAR 等危险类型。
+- 上传会校验扩展名、MIME type、文件大小和主要文件签名。
+- 删除文件记录时会同步删除磁盘文件；删除旅行时会清理该旅行上传文件。
 
-## Private Deployment Notes
+## AI 安全
 
-TraceMe is intended for private use. Prefer local access, SSH tunneling, VPN, Tailscale, or ZeroTier. Public exposure requires your own domain, compliance review, HTTPS, reverse proxy, firewall policy, strong credentials, monitoring, and backup protection.
+- AI 页面有敏感信息提示。
+- AI 不会读取上传文件。
+- 不要把证件号、手机号、住址、订单号、票据全文、保险单、API Key、密码等内容粘贴给 AI。
+- 发现敏感字段时会阻止生成。
+- AI 历史只保存脱敏提示摘要和回复摘要，不保存完整原文。
+- OpenAI API Key 只从服务端环境变量读取，不暴露到前端。
+- 可使用 `AI_PROVIDER=mock` 在无外部 API 的情况下体验草稿功能。
 
-Never commit `.env`, API keys, session secrets, SQLite databases, uploaded documents, or generated backup archives.
+## 备份安全
+
+- 备份保存在 `storage/backups`，不放入 `public`。
+- 备份下载必须登录。
+- 备份 zip 包含 SQLite 数据库快照和上传文件。
+- 备份不包含 `.env`、`node_modules`、`.next`、日志、缓存和现有备份文件。
+- 备份仍可能包含大量隐私数据，应加密保存，不要发给 AI 或不可信第三方。
+- 删除备份记录时会同步删除磁盘备份文件。
+
+## 环境变量安全
+
+- `.env` 被 `.gitignore` 和 `.dockerignore` 排除。
+- `.env.example` 只放示例值，不放真实密钥。
+- `SESSION_SECRET` 必须是长随机字符串。
+- `INITIAL_ADMIN_PASSWORD` 必须替换为强密码。
+- `OPENAI_API_KEY` 只能放在 `.env` 或服务器密钥管理中。
+- 系统信息页只显示是否配置，不显示敏感环境变量名称和值。
+- 健康检查 API 不返回密钥、数据库路径或运行环境快照。
+
+## 不公开部署提醒
+
+TraceMe 的目标是个人自用，不是公开服务。公网部署会把登录、文件、备份、AI、导出和旅行隐私全部放到更高风险环境里。除非你已经准备好完整的 Web 安全运维能力，否则请保持默认 `127.0.0.1:3000` 绑定，并通过 SSH 隧道或私有网络访问。

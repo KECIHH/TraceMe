@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { formatDisplayDateTime, formatEmptyValue } from "@/lib/display-format";
 import { requireUser } from "@/lib/auth/session";
 import { formatBytes, getSystemOverview } from "@/lib/settings/system";
 import { isAiEnabledByUserSetting } from "@/server/services/ai/settings";
@@ -45,7 +46,7 @@ export default async function SettingsPage() {
   return (
     <section className="space-y-6">
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Settings</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">系统设置</p>
         <h1 className="mt-2 text-3xl font-semibold">设置中心</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           管理个人资料、登录安全、系统状态、备份和 AI 配置。敏感配置只在服务端读取，不会在页面中展示。
@@ -77,7 +78,14 @@ export default async function SettingsPage() {
           <Info label="AI 功能" value={aiEnabled ? "已开启" : "已关闭"} />
           <Info label="AI Provider" value={system.aiProvider} />
           <Info label="AI Key" value={system.aiApiKeyConfigured ? "已配置" : "未配置"} />
-          <Info label="最近备份" value={system.recentBackupAt?.toLocaleString("zh-CN") ?? "暂无"} />
+          <Info
+            label="最近备份"
+            value={
+              system.recentBackupAt
+                ? formatDisplayDateTime(system.recentBackupAt)
+                : formatEmptyValue(null)
+            }
+          />
         </dl>
       </section>
 

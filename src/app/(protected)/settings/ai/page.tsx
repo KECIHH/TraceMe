@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { SubmitButton } from "@/components/submit-button";
 import { getAiProviderConfig } from "@/lib/ai";
 import { requireUser } from "@/lib/auth/session";
 import { isAiEnabledByUserSetting } from "@/server/services/ai/settings";
@@ -45,23 +46,23 @@ export default async function AiSettingsPage() {
         <div className="mt-5 flex flex-wrap gap-3">
           <form action={setAiEnabledAction}>
             <input name="enabled" type="hidden" value="true" />
-            <button
+            <SubmitButton
               className="rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={aiEnabled}
-              type="submit"
+              pendingLabel="开启中..."
             >
               开启 AI
-            </button>
+            </SubmitButton>
           </form>
           <form action={setAiEnabledAction}>
             <input name="enabled" type="hidden" value="false" />
-            <button
+            <SubmitButton
               className="rounded-md border border-[#d46a55] px-4 py-2.5 text-sm font-semibold text-[#9b2f1f] transition hover:bg-[#fff2ee] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!aiEnabled}
-              type="submit"
+              pendingLabel="关闭中..."
             >
               关闭 AI
-            </button>
+            </SubmitButton>
           </form>
         </div>
       </section>

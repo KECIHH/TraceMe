@@ -1,6 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayDate } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import { formatTags } from "@/lib/trip-management";
 
@@ -42,7 +44,7 @@ export default async function NotesPage({
       <Notice error={notice.error} message={notice.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Notes</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">攻略笔记</p>
         <h1 className="mt-2 text-3xl font-semibold">攻略笔记</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           用 textarea 记录攻略摘录、个人判断和链接来源，并用标签保持可检索。
@@ -77,7 +79,7 @@ export default async function NotesPage({
                   <div>
                     <h2 className="text-xl font-semibold">{note.title}</h2>
                     <p className="mt-1 text-xs text-[#7a858c]">
-                      更新于 {note.updatedAt.toLocaleDateString("zh-CN")}
+                      更新于 {formatDisplayDate(note.updatedAt)}
                     </p>
                   </div>
                   {note.sourceUrl ? (
@@ -166,9 +168,9 @@ function NoteForm({
         <input className={inputClassName} defaultValue={formatTags(note?.tags)} name="tags" placeholder="交通, 美食, 亲子" />
       </Field>
       <div>
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

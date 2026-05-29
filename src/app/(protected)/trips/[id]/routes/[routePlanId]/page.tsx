@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayDate, formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   DEFAULT_ROUTE_SCORE_WEIGHTS,
@@ -109,7 +111,7 @@ export default async function RoutePlanDetailPage({
           <h1 className="mt-3 text-3xl font-semibold">{routePlan.title}</h1>
           <p className="mt-2 text-sm text-[#5d6972]">
             {routePlan.fromName} → {routePlan.toName} · 出发日期：
-            {toDateInputValue(routePlan.departDate) || "未设置"} · 权重：
+            {formatDisplayDate(routePlan.departDate)} · 权重：
             {activePreset?.label ?? "自定义权重"}
           </p>
         </div>
@@ -250,7 +252,10 @@ export default async function RoutePlanDetailPage({
                   <Info label="出发/到达" value={`${formatDateTimeValue(option.departTime)} / ${formatDateTimeValue(option.arriveTime)}`} />
                   <Info label="总耗时" value={formatMinutes(option.doorToDoorMinutes)} />
                   <Info label="价格" value={formatPrice(option.price, option.currency)} />
-                  <Info label="中转次数" value={`${option.transferCount ?? "未设置"}`} />
+                      <Info
+                        label="中转次数"
+                        value={formatEmptyValue(option.transferCount)}
+                      />
                   <Info label="舒适度" value={formatScore(option.comfortScore)} />
                   <Info label="风险评分" value={formatScore(option.riskScore)} />
                   <Info label="行李友好度" value={formatScore(option.luggageFriendlyScore)} />
@@ -277,12 +282,12 @@ export default async function RoutePlanDetailPage({
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   <form action={selectAction}>
-                    <button
+                    <SubmitButton
                       className="rounded-md bg-[#2f6f73] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#285f62]"
-                      type="submit"
+                      pendingLabel="选择中..."
                     >
                       选择为推荐方案
-                    </button>
+                    </SubmitButton>
                   </form>
                   <form action={deleteAction}>
                     <ConfirmSubmitButton
@@ -346,7 +351,7 @@ export default async function RoutePlanDetailPage({
                       </td>
                       <td className="py-3 pr-4">{formatMinutes(option.doorToDoorMinutes)}</td>
                       <td className="py-3 pr-4">{formatPrice(option.price, option.currency)}</td>
-                      <td className="py-3 pr-4">{option.transferCount ?? "未设置"}</td>
+                      <td className="py-3 pr-4">{formatEmptyValue(option.transferCount)}</td>
                       <td className="py-3 pr-4">{formatScore(option.comfortScore)}</td>
                       <td className="py-3 pr-4">{formatScore(option.riskScore)}</td>
                       <td className="py-3 pr-4">{formatScore(option.luggageFriendlyScore)}</td>
@@ -426,9 +431,9 @@ function RoutePlanForm({
         />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -537,9 +542,9 @@ function TransportOptionForm({
         <textarea className={`${inputClassName} min-h-24 resize-y`} defaultValue={option?.notes ?? ""} name="notes" />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -610,7 +615,7 @@ function VerificationNotice() {
 }
 
 function formatScore(value: number | null | undefined): string {
-  return value === null || value === undefined ? "未设置" : `${value}`;
+  return formatEmptyValue(value);
 }
 
 const inputClassName =

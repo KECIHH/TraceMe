@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   formatBudget,
@@ -104,12 +105,12 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
         <InfoCard label="返回日期" value={formatTripDate(trip.endDate)} />
         <InfoCard
           label="旅行天数"
-          value={durationDays ? `${durationDays} 天` : "待定"}
+          value={durationDays ? `${durationDays} 天` : formatEmptyValue(null)}
         />
-        <InfoCard label="出发城市" value={trip.homeCity || "未设置"} />
+        <InfoCard label="出发城市" value={formatEmptyValue(trip.homeCity)} />
         <InfoCard
           label="主要目的地"
-          value={trip.mainDestination || "未设置"}
+          value={formatEmptyValue(trip.mainDestination)}
         />
         <InfoCard
           label="总预算"

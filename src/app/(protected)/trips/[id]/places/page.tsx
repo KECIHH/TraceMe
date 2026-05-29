@@ -1,6 +1,8 @@
 import type { PlaceType, Prisma, Priority } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayMoney, formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   formatTags,
@@ -91,7 +93,7 @@ export default async function PlacesPage({
       <Notice error={queryParams.error} message={queryParams.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Places</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">地点库</p>
         <h1 className="mt-2 text-3xl font-semibold">地点库</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           汇总景点、餐厅、酒店、交通节点、购物点和紧急地点，按类型、优先级和关键词快速筛选。
@@ -125,9 +127,9 @@ export default async function PlacesPage({
             </option>
           ))}
         </select>
-        <button className={secondaryButtonClassName} type="submit">
+        <SubmitButton className={secondaryButtonClassName} pendingLabel="筛选中...">
           筛选地点
-        </button>
+        </SubmitButton>
       </form>
 
       <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
@@ -176,18 +178,28 @@ export default async function PlacesPage({
                 </div>
 
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <Info label="地址" value={place.address || "未设置"} />
-                  <Info label="电话" value={place.phone || "未设置"} />
-                  <Info label="预估花费" value={place.estimatedCost ? String(place.estimatedCost) : "未设置"} />
+                  <Info label="地址" value={formatEmptyValue(place.address)} />
+                  <Info label="电话" value={formatEmptyValue(place.phone)} />
+                  <Info
+                    label="预估花费"
+                    value={formatDisplayMoney(place.estimatedCost)}
+                  />
                   <Info
                     label="建议时长"
                     value={
                       place.estimatedDurationMin
                         ? `${place.estimatedDurationMin} 分钟`
-                        : "未设置"
+                        : formatEmptyValue(null)
                     }
                   />
-                  <Info label="个人评分" value={place.ratingPersonal ? `${place.ratingPersonal}/5` : "未评分"} />
+                  <Info
+                    label="个人评分"
+                    value={
+                      place.ratingPersonal
+                        ? `${place.ratingPersonal}/5`
+                        : formatEmptyValue(null)
+                    }
+                  />
                   <Info
                     label="行程引用"
                     value={`${place._count.itineraryItems} 个行程项`}
@@ -363,9 +375,9 @@ function PlaceForm({
         <textarea className={`${inputClassName} min-h-24 resize-y`} defaultValue={place?.notes ?? ""} name="notes" />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );

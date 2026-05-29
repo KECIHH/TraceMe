@@ -1,204 +1,170 @@
-# Deployment / 部署
+# Deployment
 
-TraceMe is designed for private self-hosting. The default Docker Compose file binds the app to `127.0.0.1:3000` so it is reachable from the server itself, SSH tunnels, or a private network, but not directly exposed to the public internet.
+TraceMe 默认用于本地或私有服务器部署。请优先使用本机访问、SSH 隧道、VPN、Tailscale 或 ZeroTier，不建议直接开放到公网。
 
-迹遇默认按个人私有部署设计。`docker-compose.yml` 默认绑定 `127.0.0.1:3000`，适合服务器本机、SSH 隧道或私有网络访问，不默认向公网开放。
-
-## Quick Start / 快速开始
-
-1. Copy the environment template.
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Windows PowerShell:
-
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-2. Edit `.env` and replace all example secrets and passwords.
-
-   For Docker Compose deployment, keep the SQLite database inside the container volume:
-
-   ```env
-   DATABASE_URL="file:/app/prisma/data/traceme.db"
-   APP_BASE_URL="http://127.0.0.1:3000"
-   NODE_ENV="production"
-   ```
-
-3. Build and start the app.
-
-   ```bash
-   docker compose build
-   docker compose up -d
-   ```
-
-4. Run the first admin seed once.
-
-   ```bash
-   docker compose exec travel-planner node scripts/seed-admin.mjs
-   ```
-
-5. Open the app locally on the server or through a tunnel:
-
-   ```text
-   http://127.0.0.1:3000
-   ```
-
-## Environment Variables / 环境变量
-
-Required:
-
-- `DATABASE_URL`: SQLite connection string. Docker Compose sets the container runtime value to `file:/app/prisma/data/traceme.db` so SQLite is stored in the `sqlite-data` volume.
-- `APP_BASE_URL`: Base URL used by the app, for example `http://127.0.0.1:3000`.
-- `SESSION_SECRET`: Long random secret used for session-related signing or future encryption. Use at least 32 random characters.
-- `INITIAL_ADMIN_USERNAME`: Username for the first admin seed.
-- `INITIAL_ADMIN_PASSWORD`: Password used only when creating or explicitly resetting the admin account.
-- `NODE_ENV`: Must be `production` for Docker deployment.
-
-Optional:
-
-- `OPENAI_API_KEY`: Optional AI provider key. Do not commit it to Git.
-- `DOCUMENT_ENCRYPTION_KEY`: Reserved optional key for document encryption workflows.
-
-Security notes:
-
-- Generate a strong `SESSION_SECRET`; do not use the example value.
-- Do not use the development value `file:./dev.db` for Docker deployment; it is not mounted to the SQLite volume.
-- Change `INITIAL_ADMIN_PASSWORD` immediately after first startup when password changing is available. Until then, keep `.env` private and use a strong password from the beginning.
-- Never commit `.env`, API keys, session secrets, database files, uploaded files, or backups.
-- Do not upload `.env` to a public repository.
-
-## Database Migration / 数据库迁移
-
-The Docker container runs this on startup:
+## 本地运行
 
 ```bash
-prisma migrate deploy
+npm install
+cp .env.example .env
+npm run db:ensure
+npm run db:deploy
+npm run db:seed
+npm run dev
 ```
 
-This applies checked-in Prisma migrations safely and does not seed or overwrite user data.
+Windows PowerShell 复制环境文件：
 
-First deployment:
+```powershell
+Copy-Item .env.example .env
+```
+
+访问：
+
+```text
+http://localhost:3000
+```
+
+健康检查：
+
+```text
+http://localhost:3000/api/health
+```
+
+## Docker 部署
+
+编辑 `.env`，替换默认密码和密钥后执行：
 
 ```bash
+docker compose build
 docker compose up -d
-docker compose exec travel-planner npx prisma migrate deploy
 docker compose exec travel-planner node scripts/seed-admin.mjs
 ```
 
-Upgrade:
-
-```bash
-git pull
-docker compose build
-docker compose up -d
-docker compose exec travel-planner npx prisma migrate deploy
-```
-
-Do not run seed repeatedly unless you understand the behavior. The seed script creates the admin user if missing. It only resets the password when `RESET_ADMIN_PASSWORD=true` is set.
-
-## SQLite Backup / SQLite 备份
-
-Create a backup while the app is stopped:
-
-```bash
-docker compose stop travel-planner
-docker run --rm -v traceme_sqlite-data:/data -v "%cd%:/backup" alpine sh -c "cp /data/traceme.db /backup/traceme-backup.db"
-docker compose up -d
-```
-
-Linux/macOS shell:
-
-```bash
-docker compose stop travel-planner
-docker run --rm -v traceme_sqlite-data:/data -v "$PWD:/backup" alpine sh -c "cp /data/traceme.db /backup/traceme-backup.db"
-docker compose up -d
-```
-
-Restore a backup:
-
-```bash
-docker compose stop travel-planner
-docker run --rm -v traceme_sqlite-data:/data -v "%cd%:/backup" alpine sh -c "cp /backup/traceme-backup.db /data/traceme.db"
-docker compose up -d
-```
-
-Linux/macOS shell:
-
-```bash
-docker compose stop travel-planner
-docker run --rm -v traceme_sqlite-data:/data -v "$PWD:/backup" alpine sh -c "cp /backup/traceme-backup.db /data/traceme.db"
-docker compose up -d
-```
-
-Uploaded documents and generated backups live in separate Docker volumes:
-
-- `uploads-data` mounted at `/app/storage/uploads`
-- `backups-data` mounted at `/app/storage/backups`
-
-Back them up separately if you use document upload or app backup features.
-
-## Access Options / 访问方式
-
-Local access on the server:
+默认访问：
 
 ```text
 http://127.0.0.1:3000
 ```
 
-SSH tunnel from your computer:
+Compose 默认端口绑定：
 
-```bash
-ssh -L 3000:127.0.0.1:3000 user@server
+```yaml
+127.0.0.1:3000:3000
 ```
 
-Then open:
+这意味着服务只暴露给服务器本机。远程访问请使用 SSH 隧道或私有网络。
+
+## 环境变量
+
+必填：
+
+- `DATABASE_URL`：SQLite 连接字符串。本地默认 `file:./dev.db`；Docker 默认 `file:/app/prisma/data/traceme.db`。
+- `APP_BASE_URL`：应用访问地址。
+- `SESSION_SECRET`：长随机字符串。
+- `INITIAL_ADMIN_USERNAME`：初始管理员用户名。
+- `INITIAL_ADMIN_PASSWORD`：初始管理员密码。
+
+可选：
+
+- `RESET_ADMIN_PASSWORD=true`：重新 seed 时重置管理员密码。
+- `SEED_EXAMPLE_TRIP=false`：跳过虚构示例旅行。
+- `AI_PROVIDER=openai|mock`：AI provider。
+- `OPENAI_API_KEY`：OpenAI API Key，仅服务端读取。
+- `OPENAI_MODEL`：OpenAI 模型名。
+- `AI_FEATURE_ENABLED=true|false`：AI 功能默认开关。
+- `MAX_UPLOAD_FILE_SIZE_BYTES`：单文件上传上限。
+- `MAX_TRIP_DOCUMENT_STORAGE_BYTES`：单旅行文件总量上限。
+- `DOCUMENT_ENCRYPTION_KEY`：预留文件加密密钥配置。
+
+生产环境启动会运行 `scripts/validate-production-env.mjs`，用于阻止明显不安全的默认配置。
+
+## 数据库迁移
+
+开发环境：
+
+```bash
+npm run db:migrate
+```
+
+生产或 Docker：
+
+```bash
+npm run db:deploy
+```
+
+创建管理员和示例旅行：
+
+```bash
+npm run db:seed
+```
+
+Docker 中：
+
+```bash
+docker compose exec travel-planner node scripts/seed-admin.mjs
+```
+
+## SSH 隧道访问
+
+如果应用部署在远程服务器，并且 Compose 仍绑定 `127.0.0.1:3000`：
+
+```bash
+ssh -L 3000:127.0.0.1:3000 user@your-server
+```
+
+然后在本机浏览器打开：
 
 ```text
 http://127.0.0.1:3000
 ```
 
-Private network access:
+## 持久化目录
 
-- Use VPN, Tailscale, or ZeroTier.
-- Keep the app reachable only inside the private network.
-- Do not open the app port to the public internet.
+Docker Compose 使用三个 volume：
 
-Public internet access:
+- `sqlite-data`：SQLite 数据库。
+- `uploads-data`：上传文件。
+- `backups-data`：系统备份。
 
-- This repository does not provide public deployment defaults.
-- If you must expose it publicly, you are responsible for domain setup, ICP filing or local compliance requirements, HTTPS, reverse proxy, firewall rules, strong passwords, monitoring, and backup security.
-- Review privacy risks before uploading real travel, identity, booking, payment, or insurance documents.
+本地开发对应：
 
-## Manual Verification / 手动验证
+- `prisma/dev.db`
+- `storage/uploads`
+- `storage/backups`
 
-Recommended deployment checks:
+这些目录和文件都不应提交到 Git。
 
-```bash
-docker compose build
-docker compose up -d
-docker compose logs travel-planner
-docker compose exec travel-planner npx prisma migrate deploy
-docker compose exec travel-planner node scripts/seed-admin.mjs
-```
+## 备份与恢复
 
-Then verify:
+系统备份可在设置中心创建。备份 zip 包含：
 
-- Open `http://127.0.0.1:3000`.
-- Log in with `INITIAL_ADMIN_USERNAME` and `INITIAL_ADMIN_PASSWORD`.
-- Create a trip.
-- Restart with `docker compose restart travel-planner`.
-- Confirm the trip still exists after restart.
-- Confirm `/api/health` returns only basic status, timestamp, and version fields.
+- `manifest.json`
+- SQLite 数据库快照
+- `storage/uploads` 中的上传文件
 
-## 中文速查
+备份不会包含：
 
-- 默认只监听 `127.0.0.1:3000`。
-- 推荐通过 SSH 隧道、VPN、Tailscale 或 ZeroTier 访问。
-- 不要把 `.env`、数据库、上传文件、备份文件提交到 Git。
-- 首次部署后单独运行 `node scripts/seed-admin.mjs` 创建管理员。
-- 容器启动会执行 `prisma migrate deploy`，不会每次强制 seed。
-- 公网部署需要你自行处理域名、备案、HTTPS、反向代理、防火墙、强密码和隐私风险。
+- `.env`
+- `node_modules`
+- `.next`
+- 日志和缓存
+- 现有备份文件
+
+恢复思路：
+
+1. 停止应用。
+2. 解压备份。
+3. 用备份中的数据库文件替换当前 SQLite 数据库。
+4. 用备份中的 `storage/uploads` 替换或合并当前上传目录。
+5. 确认 `.env` 使用当前服务器的真实密钥和密码。
+6. 启动应用并访问 `/api/health`。
+
+## 常见问题
+
+- 无法登录：确认已执行 seed，且 `.env` 中的用户名密码正确；如果要重置密码，设置 `RESET_ADMIN_PASSWORD=true` 后重新运行 seed。
+- Playwright 缺浏览器：执行 `npx playwright install chromium`。
+- Docker 启动失败：检查 `SESSION_SECRET` 和 `INITIAL_ADMIN_PASSWORD` 是否仍是默认值。
+- 上传失败：检查文件扩展名、MIME type、文件大小和 `storage/uploads` 写权限。
+- 备份失败：检查 SQLite 数据库文件是否存在，`storage/backups` 是否可写。
+- 远程访问失败：默认只监听远程服务器的 `127.0.0.1`，需要 SSH 隧道或私有网络。

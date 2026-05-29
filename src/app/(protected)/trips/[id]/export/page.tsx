@@ -28,7 +28,7 @@ export default async function TripExportPage({ params }: TripExportPageProps) {
       <TripModuleNav active="export" tripId={trip.id} tripTitle={trip.title} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Export</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">导出</p>
         <h1 className="mt-2 text-3xl font-semibold">导出旅行数据</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           为「{trip.title}」生成 JSON、Markdown 或可打印 HTML。文件导出后会保存在你的浏览器下载目录。

@@ -1,6 +1,8 @@
 import type { FoodStatus, Prisma } from "@prisma/client";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
+import { formatDisplayMoney, formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
   FOOD_STATUS_OPTIONS,
@@ -50,7 +52,7 @@ export default async function FoodsPage({
       <Notice error={queryParams.error} message={queryParams.message} />
 
       <div>
-        <p className="text-sm font-semibold text-[#2f6f73]">Food</p>
+        <p className="text-sm font-semibold text-[#2f6f73]">美食</p>
         <h1 className="mt-2 text-3xl font-semibold">美食管理</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
           单独整理餐厅、美食地点、推荐菜、人均价格、营业时间和吃过/想吃/避雷状态。
@@ -91,7 +93,7 @@ export default async function FoodsPage({
                   <div>
                     <h2 className="text-xl font-semibold">{place.name}</h2>
                     <p className="mt-1 text-sm text-[#5d6972]">
-                      {place.address || "未设置地址"}
+                      {formatEmptyValue(place.address)}
                     </p>
                   </div>
                   <span className={foodStatusClassName(foodStatus)}>
@@ -100,13 +102,13 @@ export default async function FoodsPage({
                 </div>
 
                 <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                  <Info label="推荐菜" value={dishes || "未记录"} />
+                  <Info label="推荐菜" value={formatEmptyValue(dishes)} />
                   <Info
                     label="人均价格"
                     value={
                       detail?.averageCost
                         ? formatAmount(detail.averageCost, currency)
-                        : "未记录"
+                        : formatEmptyValue(null)
                     }
                   />
                   <Info
@@ -114,14 +116,14 @@ export default async function FoodsPage({
                     value={
                       typeof place.openingHours === "string"
                         ? place.openingHours
-                        : "未记录"
+                        : formatEmptyValue(null)
                     }
                   />
                   <Info
                     label="是否需要预约"
                     value={detail?.reservationNeeded ? "需要" : "不需要/未确认"}
                   />
-                  <Info label="电话" value={place.phone || "未记录"} />
+                  <Info label="电话" value={formatEmptyValue(place.phone)} />
                   <Info label="状态" value={getFoodStatusLabel(foodStatus)} />
                 </dl>
 
@@ -256,9 +258,9 @@ function FoodForm({
         />
       </Field>
       <div className="md:col-span-2">
-        <button className={primaryButtonClassName} type="submit">
+        <SubmitButton className={primaryButtonClassName}>
           {submitLabel}
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -299,7 +301,7 @@ function formatAmount(
   amount: Prisma.Decimal | number | string,
   currency: string,
 ): string {
-  return `${currency} ${String(amount)}`;
+  return formatDisplayMoney(amount, currency);
 }
 
 function foodStatusClassName(status: FoodStatus): string {
