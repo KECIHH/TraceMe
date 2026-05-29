@@ -42,6 +42,7 @@ export type AiTripContext = {
 };
 
 export type AiGenerateRequest = {
+  maxOutputTokens?: number;
   systemPrompt: string;
   task: AiTaskDefinition;
   userPrompt: string;
@@ -555,7 +556,7 @@ class OpenAiResponsesProvider implements AiProvider {
       body: JSON.stringify({
         input: request.userPrompt,
         instructions: request.systemPrompt,
-        max_output_tokens: 1800,
+        max_output_tokens: request.maxOutputTokens ?? 1800,
         model: this.model,
       }),
       headers: {

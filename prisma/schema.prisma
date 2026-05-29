@@ -136,6 +136,13 @@ enum BackupStatus {
   deleted
 }
 
+enum AiPlanDraftStatus {
+  draft
+  applied
+  discarded
+  failed
+}
+
 model User {
   id           String    @id @default(cuid())
   username     String    @unique
@@ -183,6 +190,7 @@ model Trip {
   documents       Document[]
   notes           Note[]
   aiConversations AiConversation[]
+  aiPlanDrafts    AiPlanDraft[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 }
@@ -469,6 +477,24 @@ model AiConversation {
   updatedAt       DateTime @updatedAt
 
   @@index([tripId])
+}
+
+model AiPlanDraft {
+  id           String            @id @default(cuid())
+  tripId       String?
+  inputJson    Json
+  draftJson    Json?
+  provider     String
+  model        String
+  status       AiPlanDraftStatus @default(draft)
+  errorMessage String?
+  trip         Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([tripId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model AppSetting {
