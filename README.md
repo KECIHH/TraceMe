@@ -2,7 +2,7 @@
 
 TraceMe 是一个私有部署的旅行规划网站（Private Travel Planner），用于在小范围内管理旅行计划、目的地、地点库、每日行程、交通方案、准备清单、预算、票据文件、笔记、AI 旅行草稿、导出和系统备份。
 
-当前阶段支持通过公网域名和 HTTPS 访问，但仍然强制登录，暂不开放公众注册、公开社区、公开分享、在线支付或商业化能力。管理员通过 seed 创建，后续如补齐后台用户管理，可由管理员在后台创建小范围使用账号。在完成多人权限系统、隐私合规和滥用防护前，不建议开放公众使用。
+当前阶段支持通过公网域名和 HTTPS 访问，但仍然强制登录，暂不开放公众注册、公开社区、公开分享、在线支付或商业化能力。管理员通过 seed 创建；后续如补齐后台用户管理，也应保持小范围使用。在完成多人权限系统、隐私合规和滥用防护前，不建议开放公众使用。
 
 ## 当前能力
 
@@ -52,7 +52,7 @@ Copy-Item .env.example .env
 http://localhost:3000
 ```
 
-## 生产部署概览
+## 生产访问链路
 
 推荐链路：
 
@@ -60,7 +60,48 @@ http://localhost:3000
 浏览器 -> HTTPS 域名 -> 反向代理 -> 127.0.0.1:3000 -> Next.js 应用
 ```
 
-生产部署建议使用 Docker Compose：
+域名和 HTTPS 配置见 [docs/DOMAIN_AND_HTTPS.md](docs/DOMAIN_AND_HTTPS.md)，完整部署说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，运维手册见 [docs/OPERATIONS.md](docs/OPERATIONS.md)。
+
+## 一键部署
+
+一键部署仍然可用。生产环境现在要求显式提供 HTTPS 域名：
+
+Linux / 云服务器：
+
+```bash
+APP_BASE_URL=https://travel.example.com \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh)"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:APP_BASE_URL="https://travel.example.com"
+irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
+```
+
+脚本会完成：
+
+- clone / pull 项目。
+- 生成 `.env` 和随机管理员密码。
+- 拉取预构建镜像，或在 `TRACEME_USE_LOCAL_BUILD=true` 时本地构建。
+- 启动 `travel-planner` 容器。
+- 执行 `docker compose run --rm seed-admin` 创建管理员。
+- 等待 `/api/health` 正常。
+
+可选变量：
+
+- `TRACEME_REPO`: Git 仓库地址，默认 `https://github.com/KECIHH/TraceMe.git`。
+- `TRACEME_BRANCH`: 部署分支，默认 `main`。
+- `TRACEME_DIR`: 安装目录，默认 `~/traceme`。
+- `TRACEME_PORT`: 宿主机端口，默认 `3000`。
+- `TRACEME_BIND`: 宿主机绑定地址，默认 `127.0.0.1`。
+- `TRACEME_IMAGE`: 预构建 Docker 镜像，默认 `ghcr.io/kecihh/traceme:main`。
+- `TRACEME_USE_LOCAL_BUILD=true`: 不拉预构建镜像，改为服务器本地构建。
+- `INITIAL_ADMIN_USERNAME`: 初始管理员用户名，默认 `admin`。
+- `SEED_EXAMPLE_TRIP=false`: 跳过虚构示例旅行。
+
+## 手动 Docker 部署
 
 ```bash
 cp .env.example .env
@@ -80,7 +121,43 @@ docker compose run --rm seed-admin
 - SQLite、uploads、backups 通过 Docker volume 持久化。
 - Compose 默认只将应用绑定到 `127.0.0.1:3000`，由 Caddy/Nginx 提供 HTTPS。
 
-域名和 HTTPS 配置见 [docs/DOMAIN_AND_HTTPS.md](docs/DOMAIN_AND_HTTPS.md)，完整部署说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，运维手册见 [docs/OPERATIONS.md](docs/OPERATIONS.md)。
+## 增量更新
+
+进入服务器上的安装目录后执行：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose pull
+docker compose up -d --no-build
+docker compose ps
+```
+
+如果使用本地构建：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+容器启动会自动执行 `prisma migrate deploy`。如果本次更新需要重置管理员密码，再执行：
+
+```bash
+RESET_ADMIN_PASSWORD=true docker compose run --rm seed-admin
+```
+
+## 常用 Docker 命令
+
+```bash
+docker compose ps
+docker compose logs -f travel-planner
+docker compose restart travel-planner
+docker compose down
+docker compose run --rm seed-admin
+```
 
 ## 环境变量
 
@@ -100,8 +177,6 @@ docker compose run --rm seed-admin
 - `AI_PROVIDER`: `openai` 或 `mock`。
 - `AI_FEATURE_ENABLED`: AI 功能开关。
 - `DOCUMENT_ENCRYPTION_KEY`: 预留文档加密密钥。
-- `TRACEME_BIND`: 默认 `127.0.0.1`。
-- `TRACEME_PORT`: 默认 `3000`。
 - `ALLOW_SEARCH_INDEXING`: 默认不设置，页面 noindex；未来公开站点前再评估开启。
 
 ## 数据、上传和备份
@@ -140,15 +215,6 @@ npm run test:e2e
 
 ```bash
 npx playwright install chromium
-```
-
-## 常用 Docker 命令
-
-```bash
-docker compose ps
-docker compose logs -f
-docker compose restart
-docker compose down
 ```
 
 发布前请使用 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) 完成检查。

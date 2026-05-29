@@ -16,6 +16,24 @@
 10. 访问 `/api/health` 和登录页确认服务正常。
 11. 登录后创建首次备份。
 
+## 一键部署方式
+
+Linux / 云服务器：
+
+```bash
+APP_BASE_URL=https://travel.example.com \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh)"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:APP_BASE_URL="https://travel.example.com"
+irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
+```
+
+脚本会生成 `.env`、随机管理员密码、启动容器并执行 `docker compose run --rm seed-admin`。首次输出的密码也会保存到安装目录的 `.env` 中，请部署后尽快登录并修改为自己的强密码。
+
 ## 更新部署
 
 ```bash
@@ -26,6 +44,32 @@ docker compose logs --tail=100 travel-planner
 ```
 
 容器启动时会自动执行 `prisma migrate deploy`。如更新涉及管理员密码重置，再单独执行 seed。
+
+预构建镜像更新可使用：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose pull
+docker compose up -d --no-build
+docker compose ps
+```
+
+本地构建更新可使用：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+重置管理员密码时：
+
+```bash
+RESET_ADMIN_PASSWORD=true docker compose run --rm seed-admin
+```
 
 ## 查看日志
 

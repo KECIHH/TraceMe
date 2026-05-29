@@ -8,6 +8,38 @@ TraceMe 当前定位为私有部署的旅行规划网站。生产环境可以通
 浏览器 -> HTTPS 域名 -> 反向代理 -> 127.0.0.1:3000 -> Next.js 应用
 ```
 
+## 一键部署
+
+一键部署脚本仍然保留。生产环境必须显式提供 HTTPS 域名：
+
+Linux / 云服务器：
+
+```bash
+APP_BASE_URL=https://travel.example.com \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh)"
+```
+
+Windows PowerShell：
+
+```powershell
+$env:APP_BASE_URL="https://travel.example.com"
+irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
+```
+
+脚本会完成 clone/pull、生成 `.env`、拉取预构建镜像或本地构建、启动容器、执行 `docker compose run --rm seed-admin`、等待 `/api/health` 正常。
+
+常用参数：
+
+- `TRACEME_REPO`: Git 仓库地址，默认 `https://github.com/KECIHH/TraceMe.git`。
+- `TRACEME_BRANCH`: 部署分支，默认 `main`。
+- `TRACEME_DIR`: 安装目录，默认 `~/traceme`。
+- `TRACEME_PORT`: 宿主机端口，默认 `3000`。
+- `TRACEME_BIND`: 宿主机绑定地址，默认 `127.0.0.1`。
+- `TRACEME_IMAGE`: 预构建 Docker 镜像，默认 `ghcr.io/kecihh/traceme:main`。
+- `TRACEME_USE_LOCAL_BUILD=true`: 在服务器本地构建。
+- `INITIAL_ADMIN_USERNAME`: 初始管理员用户名，默认 `admin`。
+- `SEED_EXAMPLE_TRIP=false`: 跳过虚构示例旅行。
+
 ## 生产 Docker Compose
 
 准备 `.env`：
@@ -43,6 +75,34 @@ Compose 默认：
 - 备份文件使用 `backups-data` volume。
 - 不默认开放数据库端口。
 - 不把 `.env`、uploads、backups 或数据库文件打进镜像。
+
+## 增量更新
+
+预构建镜像部署：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose pull
+docker compose up -d --no-build
+docker compose ps
+```
+
+服务器本地构建部署：
+
+```bash
+cd ~/traceme
+git pull --ff-only origin main
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+容器启动时会自动运行 `prisma migrate deploy`。如需重置管理员密码：
+
+```bash
+RESET_ADMIN_PASSWORD=true docker compose run --rm seed-admin
+```
 
 ## 生产启动流程
 
