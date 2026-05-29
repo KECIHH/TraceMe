@@ -11,6 +11,8 @@ RUN npm ci --ignore-scripts --no-audit --fund=false
 FROM node:lts-alpine AS builder
 WORKDIR /app
 ARG ALPINE_REPOSITORY_MIRROR=""
+ARG BUILD_NODE_OPTIONS="--max-old-space-size=1024"
+ENV NODE_OPTIONS=${BUILD_NODE_OPTIONS}
 RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
   && apk add --no-cache openssl
 COPY --from=deps /app/node_modules ./node_modules

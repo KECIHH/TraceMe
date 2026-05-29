@@ -68,6 +68,9 @@ http://127.0.0.1:3000
 - `TRACEME_BUILD_RETRIES`：Docker 构建失败时的重试次数，默认 `3`。
 - `NPM_CONFIG_REGISTRY`：Docker 构建时使用的 npm registry。一键脚本默认使用 `https://registry.npmmirror.com`。
 - `ALPINE_REPOSITORY_MIRROR`：Docker 构建时使用的 Alpine 软件源。一键脚本默认使用 `https://mirrors.aliyun.com/alpine`。
+- `BUILD_NODE_OPTIONS`：Docker 构建阶段的 Node 内存参数，默认 `--max-old-space-size=1024`。
+- `TRACEME_SWAP_SIZE_GB`：Linux 一键脚本自动创建的 swap 大小，默认 `4`。
+- `TRACEME_SKIP_SWAP=true`：跳过自动 swap 设置。
 
 示例：部署到服务器 `/opt/traceme`，监听 `8080` 并允许外部访问：
 
@@ -219,6 +222,7 @@ Docker Compose 使用三个 volume：
 - Playwright 缺浏览器：执行 `npx playwright install chromium`。
 - Docker 启动失败：检查 `SESSION_SECRET` 和 `INITIAL_ADMIN_PASSWORD` 是否仍是默认值。
 - Docker 构建出现 `short read` / `unexpected EOF`：通常是服务器拉取 Docker Hub 基础镜像时网络中断。先重试同一条一键部署命令；如果仍失败，执行 `cd /root/traceme && docker builder prune -f && docker image rm node:lts-alpine || true` 后再重试。阿里云服务器建议配置 Docker 镜像加速器后重启 Docker。
+- 服务器构建时卡死或只能强制重启：通常是 ECS 内存不足且没有 swap。一键脚本会自动创建 `/swapfile.traceme`，并关闭 Docker BuildKit 并行构建；建议 1 核 1G 机器至少保留 4GB swap。
 - 上传失败：检查文件扩展名、MIME type、文件大小和 `storage/uploads` 写权限。
 - 备份失败：检查 SQLite 数据库文件是否存在，`storage/backups` 是否可写。
 - 远程访问失败：默认只监听远程服务器的 `127.0.0.1`，需要 SSH 隧道或私有网络。

@@ -13,6 +13,11 @@ BUILD_RETRIES="${TRACEME_BUILD_RETRIES:-3}"
 BUILD_ATTEMPT_TIMEOUT="${TRACEME_BUILD_ATTEMPT_TIMEOUT:-1200}"
 NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-https://registry.npmmirror.com}"
 ALPINE_REPOSITORY_MIRROR="${ALPINE_REPOSITORY_MIRROR:-https://mirrors.aliyun.com/alpine}"
+BUILD_NODE_OPTIONS="${BUILD_NODE_OPTIONS:---max-old-space-size=1024}"
+SWAP_FILE="${TRACEME_SWAP_FILE:-/swapfile.traceme}"
+SWAP_SIZE_GB="${TRACEME_SWAP_SIZE_GB:-4}"
+MIN_SWAP_MB="${TRACEME_MIN_SWAP_MB:-2048}"
+SKIP_SWAP="${TRACEME_SKIP_SWAP:-false}"
 
 need_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -81,11 +86,54 @@ On Alibaba Cloud, also consider configuring a Docker registry mirror in
 EOF_HELP
 }
 
+ensure_swap() {
+  if [ "$SKIP_SWAP" = "true" ]; then
+    echo "Skipping swap setup because TRACEME_SKIP_SWAP=true."
+    return
+  fi
+
+  if [ "$(id -u)" -ne 0 ]; then
+    echo "Not running as root; skipping automatic swap setup."
+    return
+  fi
+
+  local swap_total_mb
+  swap_total_mb="$(awk '/SwapTotal/ {print int($2 / 1024)}' /proc/meminfo)"
+  if [ "$swap_total_mb" -ge "$MIN_SWAP_MB" ]; then
+    echo "Swap is already available: ${swap_total_mb} MB."
+    return
+  fi
+
+  echo "Creating ${SWAP_SIZE_GB}GB swap at ${SWAP_FILE} to avoid build-time memory exhaustion ..."
+  if [ ! -f "$SWAP_FILE" ]; then
+    if command -v fallocate >/dev/null 2>&1; then
+      fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE"
+    else
+      dd if=/dev/zero of="$SWAP_FILE" bs=1M count="$((SWAP_SIZE_GB * 1024))" status=progress
+    fi
+    chmod 600 "$SWAP_FILE"
+    mkswap "$SWAP_FILE" >/dev/null
+  fi
+
+  if ! swapon --show=NAME | grep -qx "$SWAP_FILE"; then
+    swapon "$SWAP_FILE"
+  fi
+
+  if ! grep -q "^${SWAP_FILE} " /etc/fstab; then
+    printf '%s none swap sw 0 0\n' "$SWAP_FILE" >>/etc/fstab
+  fi
+
+  echo "Swap is ready:"
+  swapon --show
+}
+
 build_and_start() {
   for attempt in $(seq 1 "$BUILD_RETRIES"); do
     echo "Docker build/start attempt ${attempt}/${BUILD_RETRIES} ..."
 
-    if docker pull node:lts-alpine >/dev/null 2>&1 && timeout "$BUILD_ATTEMPT_TIMEOUT" docker compose up -d --build; then
+    if docker pull node:lts-alpine >/dev/null 2>&1 \
+      && DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0 timeout "$BUILD_ATTEMPT_TIMEOUT" docker compose build travel-planner \
+      && docker compose up -d; then
       return
     fi
 
@@ -146,6 +194,7 @@ TRACEME_BIND="${TRACEME_BIND}"
 TRACEME_PORT="${TRACEME_PORT}"
 NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY}"
 ALPINE_REPOSITORY_MIRROR="${ALPINE_REPOSITORY_MIRROR}"
+BUILD_NODE_OPTIONS="${BUILD_NODE_OPTIONS}"
 
 # Optional
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
@@ -190,6 +239,9 @@ fi
 
 ensure_env_value "NPM_CONFIG_REGISTRY" "$NPM_CONFIG_REGISTRY" ".env"
 ensure_env_value "ALPINE_REPOSITORY_MIRROR" "$ALPINE_REPOSITORY_MIRROR" ".env"
+ensure_env_value "BUILD_NODE_OPTIONS" "$BUILD_NODE_OPTIONS" ".env"
+
+ensure_swap
 
 echo "Building and starting TraceMe ..."
 build_and_start
