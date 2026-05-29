@@ -152,7 +152,7 @@ seed 管理员时额外要求：
 
 规则：
 
-- `APP_BASE_URL` 在生产环境必须是 HTTPS URL。
+- `APP_BASE_URL` 面向公网域名时必须是 HTTPS URL；本地 Docker 冒烟测试允许 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
 - `SESSION_SECRET` 至少 32 字符。
 - 生产环境不能使用示例 `SESSION_SECRET` 或示例管理员密码。
 - 错误信息只说明变量名和规则，不打印 secret 原文。

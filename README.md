@@ -113,7 +113,7 @@ docker compose run --rm seed-admin
 
 生产环境要点：
 
-- `APP_BASE_URL` 必须是 HTTPS URL，例如 `https://travel.example.com`。
+- `APP_BASE_URL` 面向公网域名时必须是 HTTPS URL，例如 `https://travel.example.com`；本地 Docker 冒烟测试可使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
 - `SESSION_SECRET` 至少 32 字符，不能使用示例值。
 - `INITIAL_ADMIN_PASSWORD` 仅 seed 管理员时需要，生产环境不能使用默认弱密码。
 - 主应用容器不注入 `INITIAL_ADMIN_PASSWORD`，seed 管理员使用一次性 `seed-admin` 服务。
@@ -164,7 +164,7 @@ docker compose run --rm seed-admin
 必填：
 
 - `DATABASE_URL`: SQLite 连接字符串。Docker 默认 `file:/app/prisma/data/traceme.db`。
-- `APP_BASE_URL`: 生产环境必须是 HTTPS 域名。
+- `APP_BASE_URL`: 生产域名必须是 HTTPS；本地 loopback 冒烟测试可用 HTTP。
 - `SESSION_SECRET`: 长随机字符串，至少 32 字符。
 - `INITIAL_ADMIN_USERNAME`: 初始管理员用户名。
 - `INITIAL_ADMIN_PASSWORD`: 仅 seed 管理员时需要，必须替换示例弱密码。

@@ -70,12 +70,24 @@ function requireAppBaseUrl(errors: string[], env: AppEnvironment) {
 
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:") {
-      errors.push("APP_BASE_URL must use https in production.");
+    if (url.protocol === "https:") {
+      return;
     }
+
+    if (url.protocol === "http:" && isLoopbackHost(url.hostname)) {
+      return;
+    }
+
+    errors.push(
+      "APP_BASE_URL must use https in production, except loopback HTTP for local smoke tests.",
+    );
   } catch {
     errors.push("APP_BASE_URL must be a valid URL.");
   }
+}
+
+function isLoopbackHost(hostname: string) {
+  return ["localhost", "127.0.0.1", "::1"].includes(hostname.toLowerCase());
 }
 
 function validateInitialAdminPassword(

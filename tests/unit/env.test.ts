@@ -60,17 +60,32 @@ describe("production environment validation", () => {
   it("requires an HTTPS base URL and production runtime", () => {
     const result = validateProductionEnvironment({
       ...validEnv,
-      APP_BASE_URL: "http://127.0.0.1:3000",
+      APP_BASE_URL: "http://travel.example.com",
       NODE_ENV: "development",
     });
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain(
-      "APP_BASE_URL must use https in production.",
+      "APP_BASE_URL must use https in production, except loopback HTTP for local smoke tests.",
     );
     expect(result.errors).toContain(
       "NODE_ENV must be production for private deployment.",
     );
+  });
+
+  it("allows loopback HTTP for local Docker smoke tests", () => {
+    expect(
+      validateProductionEnvironment({
+        ...validEnv,
+        APP_BASE_URL: "http://localhost:3000",
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateProductionEnvironment({
+        ...validEnv,
+        APP_BASE_URL: "http://127.0.0.1:3000",
+      }).ok,
+    ).toBe(true);
   });
 
   it("rejects invalid base URLs and short session secrets", () => {
