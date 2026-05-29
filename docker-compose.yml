@@ -1,10 +1,41 @@
+name: traceme
+
 services:
-  app:
+  travel-planner:
     build: .
-    ports:
-      - "3000:3000"
+    restart: unless-stopped
     env_file:
       - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: file:/app/prisma/data/traceme.db
+      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:3000}
+      SESSION_SECRET: ${SESSION_SECRET}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+    ports:
+      - "127.0.0.1:3000:3000"
     volumes:
-      - ./storage:/app/storage
-      - ./prisma:/app/prisma
+      - sqlite-data:/app/prisma/data
+      - uploads-data:/app/storage/uploads
+      - backups-data:/app/storage/backups
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  sqlite-data:
+  uploads-data:
+  backups-data:

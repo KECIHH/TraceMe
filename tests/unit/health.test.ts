@@ -9,7 +9,21 @@ describe("GET /api/health", () => {
     await expect(response.json()).resolves.toEqual({
       ok: true,
       service: "traceme",
-      status: "healthy",
+      status: "ok",
+      timestamp: expect.any(String),
+      version: expect.any(String),
     });
+  });
+
+  it("does not expose sensitive deployment configuration", async () => {
+    const response = GET();
+    const body = await response.json();
+
+    expect(body).not.toHaveProperty("databaseUrl");
+    expect(body).not.toHaveProperty("sessionSecret");
+    expect(body).not.toHaveProperty("openaiApiKey");
+    expect(JSON.stringify(body)).not.toContain("DATABASE_URL");
+    expect(JSON.stringify(body)).not.toContain("SESSION_SECRET");
+    expect(JSON.stringify(body)).not.toContain("OPENAI_API_KEY");
   });
 });

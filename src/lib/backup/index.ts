@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { statSync } from "node:fs";
 import { deflateRawSync } from "node:zlib";
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -257,11 +258,23 @@ function resolveSqliteDatabasePath(): string {
     return normalizedPath;
   }
 
-  return path.resolve(
-    /*turbopackIgnore: true*/ process.cwd(),
-    "prisma",
-    normalizedPath,
-  );
+  const cwd =
+    process.env.TRACEME_PROJECT_ROOT ??
+    /*turbopackIgnore: true*/ process.cwd();
+  const candidates = [
+    path.resolve(cwd, "prisma", normalizedPath),
+    path.resolve(cwd, normalizedPath),
+  ];
+
+  return candidates.find((candidate) => statSyncSafe(candidate)) ?? candidates[0];
+}
+
+function statSyncSafe(filePath: string): boolean {
+  try {
+    return statSync(filePath).isFile();
+  } catch {
+    return false;
+  }
 }
 
 async function createSqliteDatabaseSnapshot(): Promise<DatabaseSnapshot> {

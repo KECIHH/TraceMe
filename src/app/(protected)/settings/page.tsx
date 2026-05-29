@@ -1,110 +1,139 @@
 import Link from "next/link";
 
 import { requireUser } from "@/lib/auth/session";
-import { getAiProviderConfig } from "@/lib/ai";
+import { formatBytes, getSystemOverview } from "@/lib/settings/system";
 import { isAiEnabledByUserSetting } from "@/server/services/ai/settings";
 
-import { setAiEnabledAction } from "./actions";
+const quickLinks = [
+  {
+    description: "修改显示名称，查看登录用户名。",
+    href: "/settings/profile",
+    label: "个人资料",
+  },
+  {
+    description: "更新登录密码，并让其他会话失效。",
+    href: "/settings/password",
+    label: "修改密码",
+  },
+  {
+    description: "创建、下载和删除系统备份。",
+    href: "/settings/backups",
+    label: "备份管理",
+  },
+  {
+    description: "查看 AI 开关、Provider 和 Key 配置状态。",
+    href: "/settings/ai",
+    label: "AI 设置",
+  },
+  {
+    description: "查看登录与敏感配置保护说明。",
+    href: "/settings/password",
+    label: "安全信息",
+  },
+  {
+    description: "查看版本、数据库、存储和维护状态。",
+    href: "/settings/system",
+    label: "关于系统",
+  },
+];
 
 export default async function SettingsPage() {
   const user = await requireUser();
   const aiEnabled = await isAiEnabledByUserSetting();
-  const aiConfig = getAiProviderConfig();
+  const system = await getSystemOverview({ aiEnabled });
 
   return (
     <section className="space-y-6">
       <div>
         <p className="text-sm font-semibold text-[#2f6f73]">Settings</p>
-        <h1 className="mt-2 text-3xl font-semibold">系统设置</h1>
+        <h1 className="mt-2 text-3xl font-semibold">设置中心</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
-          当前只展示只读信息，敏感配置不会在前端显示或修改。
+          管理个人资料、登录安全、系统状态、备份和 AI 配置。敏感配置只在服务端读取，不会在页面中展示。
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-[#d8d2c6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">当前用户</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">用户名</dt>
-              <dd className="font-medium">{user.username}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">显示名称</dt>
-              <dd className="font-medium">{user.displayName ?? "未设置"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">角色</dt>
-              <dd className="font-medium">{user.role}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="rounded-lg border border-[#d8d2c6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">系统信息</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">数据库</dt>
-              <dd className="font-medium">SQLite + Prisma</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">认证方式</dt>
-              <dd className="font-medium">HTTP-only Cookie Session</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">敏感配置</dt>
-              <dd className="font-medium">仅服务端读取</dd>
-            </div>
-          </dl>
-          <Link
-            className="mt-5 inline-flex justify-center rounded-md border border-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f2]"
-            href="/settings/backups"
-          >
-            管理系统备份
-          </Link>
-        </section>
-
-        <section className="rounded-lg border border-[#d8d2c6] bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">AI 功能</h2>
-          <p className="mt-3 text-sm leading-6 text-[#5d6972]">
-            AI Key 仅从服务端环境变量读取，前端不会显示。关闭后，旅行 AI 页面不会发起生成请求。
-          </p>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">用户开关</dt>
-              <dd className="font-medium">{aiEnabled ? "已开启" : "已关闭"}</dd>
-            </div>
-            <div className="flex justify-between gap-4">
-              <dt className="text-[#66737b]">服务状态</dt>
-              <dd className="font-medium">
-                {aiConfig.configured ? "已配置" : aiConfig.reason ?? "未配置 AI 服务"}
-              </dd>
-            </div>
-          </dl>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <form action={setAiEnabledAction}>
-              <input name="enabled" type="hidden" value="true" />
-              <button
-                className="rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={aiEnabled}
-                type="submit"
-              >
-                开启 AI
-              </button>
-            </form>
-            <form action={setAiEnabledAction}>
-              <input name="enabled" type="hidden" value="false" />
-              <button
-                className="rounded-md border border-[#d46a55] px-4 py-2.5 text-sm font-semibold text-[#9b2f1f] transition hover:bg-[#fff2ee] disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!aiEnabled}
-                type="submit"
-              >
-                关闭 AI
-              </button>
-            </form>
-          </div>
-        </section>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SummaryCard
+          label="当前用户"
+          value={user.displayName ?? user.username}
+          detail={`用户名：${user.username}`}
+        />
+        <SummaryCard
+          label="数据库状态"
+          value={system.databaseConnected ? "已连接" : "连接异常"}
+          detail={`${system.databaseType}，旅行 ${system.tripCount} 条`}
+          tone={system.databaseConnected ? "normal" : "danger"}
+        />
+        <SummaryCard
+          label="存储占用"
+          value={formatBytes(system.uploadBytes + system.backupBytes)}
+          detail={`上传 ${formatBytes(system.uploadBytes)}，备份 ${formatBytes(system.backupBytes)}`}
+        />
       </div>
+
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold">系统状态</h2>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <Info label="AI 功能" value={aiEnabled ? "已开启" : "已关闭"} />
+          <Info label="AI Provider" value={system.aiProvider} />
+          <Info label="AI Key" value={system.aiApiKeyConfigured ? "已配置" : "未配置"} />
+          <Info label="最近备份" value={system.recentBackupAt?.toLocaleString("zh-CN") ?? "暂无"} />
+        </dl>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold">快捷入口</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {quickLinks.map((item) => (
+            <Link
+              className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm transition hover:border-[#2f6f73] hover:bg-[#fbfdfc]"
+              href={item.href}
+              key={item.label}
+            >
+              <span className="text-base font-semibold text-[#172026]">
+                {item.label}
+              </span>
+              <span className="mt-2 block text-sm leading-6 text-[#5d6972]">
+                {item.description}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </section>
+  );
+}
+
+function SummaryCard({
+  detail,
+  label,
+  tone = "normal",
+  value,
+}: {
+  detail: string;
+  label: string;
+  tone?: "danger" | "normal";
+  value: string;
+}) {
+  return (
+    <section
+      className={[
+        "rounded-lg border bg-white p-5 shadow-sm",
+        tone === "danger" ? "border-[#f1b8aa]" : "border-[#d8d2c6]",
+      ].join(" ")}
+    >
+      <p className="text-sm font-medium text-[#66737b]">{label}</p>
+      <p className="mt-2 break-words text-2xl font-semibold">{value}</p>
+      <p className="mt-2 text-sm leading-6 text-[#5d6972]">{detail}</p>
+    </section>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-[#7a858c]">{label}</dt>
+      <dd className="mt-1 break-words font-medium text-[#34434c]">{value}</dd>
+    </div>
   );
 }

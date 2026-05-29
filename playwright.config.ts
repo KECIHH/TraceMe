@@ -3,6 +3,10 @@ import { config as loadEnv } from "dotenv";
 
 loadEnv({ path: ".env.test", override: true });
 
+const e2ePort = process.env.E2E_PORT ?? "3100";
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+const npmExecutable = process.platform === "win32" ? "npm.cmd" : "npm";
+
 const e2eEnv = {
   ...process.env,
   DATABASE_URL: process.env.DATABASE_URL ?? "file:./e2e.db",
@@ -11,11 +15,12 @@ const e2eEnv = {
     process.env.INITIAL_ADMIN_PASSWORD ?? "change-me-before-use",
   E2E_BYPASS_LOGIN_RATE_LIMIT: "true",
   AI_PROVIDER: "mock",
+  OPENAI_API_KEY: "test-openai-key-not-real",
   RESET_ADMIN_PASSWORD: "true",
   RESET_AI_ENABLED: "true",
+  HOSTNAME: "127.0.0.1",
+  PORT: e2ePort,
 };
-const e2ePort = process.env.E2E_PORT ?? "3100";
-const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -26,7 +31,7 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   webServer: {
-    command: `npm run dev -- --hostname 127.0.0.1 --port ${e2ePort}`,
+    command: `${npmExecutable} run start:e2e`,
     env: e2eEnv,
     reuseExistingServer: !process.env.CI,
     url: e2eBaseUrl,

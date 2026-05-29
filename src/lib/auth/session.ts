@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 
 export const SESSION_COOKIE_NAME = "traceme_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export const SESSION_COOKIE_SAME_SITE = "lax";
 
 export type AuthUser = {
   id: string;
@@ -55,25 +56,36 @@ export async function cleanupExpiredSessions(now = new Date()) {
 export async function setSessionCookie(token: string, expiresAt: Date) {
   const cookieStore = await cookies();
 
-  cookieStore.set(SESSION_COOKIE_NAME, token, {
+  cookieStore.set(SESSION_COOKIE_NAME, token, getSessionCookieOptions(expiresAt));
+}
+
+export function getSessionCookieOptions(
+  expiresAt: Date,
+  nodeEnv = process.env.NODE_ENV,
+) {
+  return {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: SESSION_COOKIE_SAME_SITE,
+    secure: nodeEnv === "production",
     path: "/",
     expires: expiresAt,
-  });
+  } as const;
 }
 
 export async function clearSessionCookie() {
   const cookieStore = await cookies();
 
-  cookieStore.set(SESSION_COOKIE_NAME, "", {
+  cookieStore.set(SESSION_COOKIE_NAME, "", getClearSessionCookieOptions());
+}
+
+export function getClearSessionCookieOptions(nodeEnv = process.env.NODE_ENV) {
+  return {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: SESSION_COOKIE_SAME_SITE,
+    secure: nodeEnv === "production",
     path: "/",
     maxAge: 0,
-  });
+  } as const;
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -128,4 +140,31 @@ export async function deleteCurrentSession() {
   }
 
   await clearSessionCookie();
+}
+
+export async function getCurrentSessionTokenHash(): Promise<string | null> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  return token ? hashSessionToken(token) : null;
+}
+
+export function buildOtherSessionsWhere(
+  userId: string,
+  currentSessionTokenHash: string | null,
+): Prisma.SessionWhereInput {
+  return {
+    userId,
+    ...(currentSessionTokenHash
+      ? { sessionTokenHash: { not: currentSessionTokenHash } }
+      : {}),
+  };
+}
+
+export async function deleteOtherSessionsForUser(userId: string) {
+  const currentSessionTokenHash = await getCurrentSessionTokenHash();
+
+  return prisma.session.deleteMany({
+    where: buildOtherSessionsWhere(userId, currentSessionTokenHash),
+  });
 }

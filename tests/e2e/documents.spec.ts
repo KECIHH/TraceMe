@@ -162,3 +162,9 @@ test("document upload blocks dangerous files and normalizes traversal names", as
   await documentCard.getByRole("button", { name: "删除文件" }).click();
   await expect(page.getByText(safeTitle)).toHaveCount(0);
 });
+
+test("upload storage is not exposed through public URLs", async ({ page }) => {
+  const response = await page.request.get("/storage/uploads/.gitkeep");
+
+  expect(response.status()).toBe(404);
+});

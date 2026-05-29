@@ -6,7 +6,10 @@ import {
   clearLoginRateLimitForTests,
 } from "@/lib/auth/rate-limit";
 import {
+  buildOtherSessionsWhere,
   canAccessProtectedRoute,
+  getClearSessionCookieOptions,
+  getSessionCookieOptions,
   isSessionExpired,
   type AuthUser,
 } from "@/lib/auth/session";
@@ -47,6 +50,49 @@ describe("protected route access", () => {
 
     expect(canAccessProtectedRoute(user)).toBe(true);
     expect(canAccessProtectedRoute(null)).toBe(false);
+  });
+});
+
+describe("session cookie options", () => {
+  it("uses secure, httpOnly, sameSite cookies in production", () => {
+    const expiresAt = new Date("2026-05-28T10:00:00.000Z");
+
+    expect(getSessionCookieOptions(expiresAt, "production")).toMatchObject({
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      expires: expiresAt,
+    });
+    expect(getClearSessionCookieOptions("production")).toMatchObject({
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      path: "/",
+      maxAge: 0,
+    });
+  });
+
+  it("does not force secure cookies outside production", () => {
+    const expiresAt = new Date("2026-05-28T10:00:00.000Z");
+
+    expect(getSessionCookieOptions(expiresAt, "test").secure).toBe(false);
+    expect(getClearSessionCookieOptions("test").secure).toBe(false);
+  });
+});
+
+describe("session cleanup filters", () => {
+  it("keeps the current session when deleting other sessions", () => {
+    expect(buildOtherSessionsWhere("user_1", "current_hash")).toEqual({
+      userId: "user_1",
+      sessionTokenHash: { not: "current_hash" },
+    });
+  });
+
+  it("targets all user sessions when there is no current session token", () => {
+    expect(buildOtherSessionsWhere("user_1", null)).toEqual({
+      userId: "user_1",
+    });
   });
 });
 

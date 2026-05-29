@@ -19,7 +19,7 @@ import {
 describe("AI assistant helpers", () => {
   it("detects provider configuration", () => {
     expect(getAiProviderConfig({}).configured).toBe(false);
-    expect(getAiProviderConfig({ OPENAI_API_KEY: "sk-test" })).toMatchObject({
+    expect(getAiProviderConfig({ OPENAI_API_KEY: "test-openai-key" })).toMatchObject({
       configured: true,
       provider: "openai",
     });
@@ -30,7 +30,7 @@ describe("AI assistant helpers", () => {
     expect(
       getAiProviderConfig({
         AI_FEATURE_ENABLED: "false",
-        OPENAI_API_KEY: "sk-test",
+        OPENAI_API_KEY: "test-openai-key",
       }),
     ).toMatchObject({ configured: false, reason: "AI 功能已关闭" });
   });
