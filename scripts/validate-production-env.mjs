@@ -3,7 +3,10 @@ const DEFAULT_ADMIN_PASSWORD = "change-me-before-use";
 const MIN_SESSION_SECRET_LENGTH = 32;
 const MIN_INITIAL_ADMIN_PASSWORD_LENGTH = 12;
 
-const errors = validateProductionEnvironment(process.env);
+const requireInitialAdminPassword = process.argv.includes("--seed");
+const errors = validateProductionEnvironment(process.env, {
+  requireInitialAdminPassword,
+});
 
 if (errors.length > 0) {
   console.error("Invalid production environment:");
@@ -15,11 +18,11 @@ if (errors.length > 0) {
 
 console.log("Production environment looks valid.");
 
-function validateProductionEnvironment(env) {
+function validateProductionEnvironment(env, options = {}) {
   const errors = [];
 
   requireValue(errors, env, "DATABASE_URL");
-  requireUrl(errors, env, "APP_BASE_URL");
+  requireAppBaseUrl(errors, env);
   const nodeEnv = requireValue(errors, env, "NODE_ENV");
   if (nodeEnv && nodeEnv !== "production") {
     errors.push("NODE_ENV must be production for private deployment.");
@@ -39,21 +42,11 @@ function validateProductionEnvironment(env) {
 
   requireValue(errors, env, "INITIAL_ADMIN_USERNAME");
 
-  const initialAdminPassword = requireValue(
+  validateInitialAdminPassword(
     errors,
     env,
-    "INITIAL_ADMIN_PASSWORD",
+    options.requireInitialAdminPassword,
   );
-  if (initialAdminPassword) {
-    if (initialAdminPassword.length < MIN_INITIAL_ADMIN_PASSWORD_LENGTH) {
-      errors.push(
-        `INITIAL_ADMIN_PASSWORD must be at least ${MIN_INITIAL_ADMIN_PASSWORD_LENGTH} characters.`,
-      );
-    }
-    if (initialAdminPassword === DEFAULT_ADMIN_PASSWORD) {
-      errors.push("INITIAL_ADMIN_PASSWORD must not use the example value.");
-    }
-  }
 
   return errors;
 }
@@ -69,8 +62,8 @@ function requireValue(errors, env, key) {
   return value;
 }
 
-function requireUrl(errors, env, key) {
-  const value = requireValue(errors, env, key);
+function requireAppBaseUrl(errors, env) {
+  const value = requireValue(errors, env, "APP_BASE_URL");
 
   if (!value) {
     return;
@@ -78,10 +71,30 @@ function requireUrl(errors, env, key) {
 
   try {
     const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      errors.push(`${key} must use http or https.`);
+    if (url.protocol !== "https:") {
+      errors.push("APP_BASE_URL must use https in production.");
     }
   } catch {
-    errors.push(`${key} must be a valid URL.`);
+    errors.push("APP_BASE_URL must be a valid URL.");
+  }
+}
+
+function validateInitialAdminPassword(errors, env, required = false) {
+  const initialAdminPassword = env.INITIAL_ADMIN_PASSWORD?.trim();
+
+  if (!initialAdminPassword) {
+    if (required) {
+      errors.push("INITIAL_ADMIN_PASSWORD is required when seeding admin.");
+    }
+    return;
+  }
+
+  if (initialAdminPassword.length < MIN_INITIAL_ADMIN_PASSWORD_LENGTH) {
+    errors.push(
+      `INITIAL_ADMIN_PASSWORD must be at least ${MIN_INITIAL_ADMIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+  if (initialAdminPassword === DEFAULT_ADMIN_PASSWORD) {
+    errors.push("INITIAL_ADMIN_PASSWORD must not use the example value.");
   }
 }

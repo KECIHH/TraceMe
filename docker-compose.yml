@@ -1,33 +1,37 @@
 name: traceme
 
+x-travel-planner-build: &travel-planner-build
+  image: ${TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main}
+  build:
+    context: .
+    args:
+      ALPINE_REPOSITORY_MIRROR: ${ALPINE_REPOSITORY_MIRROR:-}
+      BUILD_NODE_OPTIONS: ${BUILD_NODE_OPTIONS:---max-old-space-size=1024}
+      NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
+
+x-travel-planner-environment: &travel-planner-environment
+  NODE_ENV: production
+  PORT: "3000"
+  DATABASE_URL: file:/app/prisma/data/traceme.db
+  APP_BASE_URL: ${APP_BASE_URL:?Set APP_BASE_URL to your HTTPS domain, for example https://travel.example.com}
+  SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET to a random value with at least 32 characters}
+  INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:?Set INITIAL_ADMIN_USERNAME}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+
+x-travel-planner-volumes: &travel-planner-volumes
+  - sqlite-data:/app/prisma/data
+  - uploads-data:/app/storage/uploads
+  - backups-data:/app/storage/backups
+
 services:
   travel-planner:
-    image: ${TRACEME_IMAGE:-ghcr.io/kecihh/traceme:main}
-    build:
-      context: .
-      args:
-        ALPINE_REPOSITORY_MIRROR: ${ALPINE_REPOSITORY_MIRROR:-}
-        BUILD_NODE_OPTIONS: ${BUILD_NODE_OPTIONS:---max-old-space-size=1024}
-        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
+    <<: *travel-planner-build
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: production
-      PORT: "3000"
-      DATABASE_URL: file:/app/prisma/data/traceme.db
-      APP_BASE_URL: ${APP_BASE_URL:-http://127.0.0.1:3000}
-      SESSION_SECRET: ${SESSION_SECRET}
-      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+    environment: *travel-planner-environment
     ports:
       - "${TRACEME_BIND:-127.0.0.1}:${TRACEME_PORT:-3000}:3000"
-    volumes:
-      - sqlite-data:/app/prisma/data
-      - uploads-data:/app/storage/uploads
-      - backups-data:/app/storage/backups
+    volumes: *travel-planner-volumes
     healthcheck:
       test:
         [
@@ -40,6 +44,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  seed-admin:
+    <<: *travel-planner-build
+    profiles:
+      - seed
+    restart: "no"
+    environment:
+      <<: *travel-planner-environment
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      RESET_ADMIN_PASSWORD: ${RESET_ADMIN_PASSWORD:-false}
+      SEED_EXAMPLE_TRIP: ${SEED_EXAMPLE_TRIP:-true}
+    volumes: *travel-planner-volumes
+    command: ["node", "scripts/seed-admin.mjs"]
 
 volumes:
   sqlite-data:

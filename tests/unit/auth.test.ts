@@ -78,7 +78,7 @@ describe("session cookie options", () => {
     });
   });
 
-  it("allows session cookies over HTTP private production deployments", () => {
+  it("always uses secure cookies in production", () => {
     const expiresAt = new Date("2026-05-28T10:00:00.000Z");
 
     expect(
@@ -87,10 +87,10 @@ describe("session cookie options", () => {
         "production",
         "http://127.0.0.1:3000",
       ).secure,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       getClearSessionCookieOptions("production", "http://example.com").secure,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("does not force secure cookies outside production", () => {
@@ -100,7 +100,7 @@ describe("session cookie options", () => {
     expect(getClearSessionCookieOptions("test").secure).toBe(false);
   });
 
-  it("falls back to secure cookies when production base URL is missing or invalid", () => {
+  it("does not depend on the base URL to secure production cookies", () => {
     expect(shouldUseSecureCookies("production", "")).toBe(true);
     expect(shouldUseSecureCookies("production", "not-a-url")).toBe(true);
   });

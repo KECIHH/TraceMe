@@ -5,6 +5,10 @@ export type EnvironmentValidationResult = {
   errors: string[];
 };
 
+export type EnvironmentValidationOptions = {
+  requireInitialAdminPassword?: boolean;
+};
+
 const DEFAULT_SESSION_SECRET = "replace-with-a-long-random-secret";
 const DEFAULT_ADMIN_PASSWORD = "change-me-before-use";
 const MIN_SESSION_SECRET_LENGTH = 32;
@@ -12,11 +16,12 @@ const MIN_INITIAL_ADMIN_PASSWORD_LENGTH = 12;
 
 export function validateProductionEnvironment(
   env: AppEnvironment = process.env,
+  options: EnvironmentValidationOptions = {},
 ): EnvironmentValidationResult {
   const errors: string[] = [];
 
   requireValue(errors, env, "DATABASE_URL");
-  requireUrl(errors, env, "APP_BASE_URL");
+  requireAppBaseUrl(errors, env);
   const nodeEnv = requireValue(errors, env, "NODE_ENV");
   if (nodeEnv && nodeEnv !== "production") {
     errors.push("NODE_ENV must be production for private deployment.");
@@ -36,21 +41,7 @@ export function validateProductionEnvironment(
 
   requireValue(errors, env, "INITIAL_ADMIN_USERNAME");
 
-  const initialAdminPassword = requireValue(
-    errors,
-    env,
-    "INITIAL_ADMIN_PASSWORD",
-  );
-  if (initialAdminPassword) {
-    if (initialAdminPassword.length < MIN_INITIAL_ADMIN_PASSWORD_LENGTH) {
-      errors.push(
-        `INITIAL_ADMIN_PASSWORD must be at least ${MIN_INITIAL_ADMIN_PASSWORD_LENGTH} characters.`,
-      );
-    }
-    if (initialAdminPassword === DEFAULT_ADMIN_PASSWORD) {
-      errors.push("INITIAL_ADMIN_PASSWORD must not use the example value.");
-    }
-  }
+  validateInitialAdminPassword(errors, env, options.requireInitialAdminPassword);
 
   return { ok: errors.length === 0, errors };
 }
@@ -70,8 +61,8 @@ function requireValue(
   return value;
 }
 
-function requireUrl(errors: string[], env: AppEnvironment, key: string) {
-  const value = requireValue(errors, env, key);
+function requireAppBaseUrl(errors: string[], env: AppEnvironment) {
+  const value = requireValue(errors, env, "APP_BASE_URL");
 
   if (!value) {
     return;
@@ -79,10 +70,34 @@ function requireUrl(errors: string[], env: AppEnvironment, key: string) {
 
   try {
     const url = new URL(value);
-    if (!["http:", "https:"].includes(url.protocol)) {
-      errors.push(`${key} must use http or https.`);
+    if (url.protocol !== "https:") {
+      errors.push("APP_BASE_URL must use https in production.");
     }
   } catch {
-    errors.push(`${key} must be a valid URL.`);
+    errors.push("APP_BASE_URL must be a valid URL.");
+  }
+}
+
+function validateInitialAdminPassword(
+  errors: string[],
+  env: AppEnvironment,
+  required = false,
+) {
+  const initialAdminPassword = env.INITIAL_ADMIN_PASSWORD?.trim();
+
+  if (!initialAdminPassword) {
+    if (required) {
+      errors.push("INITIAL_ADMIN_PASSWORD is required when seeding admin.");
+    }
+    return;
+  }
+
+  if (initialAdminPassword.length < MIN_INITIAL_ADMIN_PASSWORD_LENGTH) {
+    errors.push(
+      `INITIAL_ADMIN_PASSWORD must be at least ${MIN_INITIAL_ADMIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+  if (initialAdminPassword === DEFAULT_ADMIN_PASSWORD) {
+    errors.push("INITIAL_ADMIN_PASSWORD must not use the example value.");
   }
 }

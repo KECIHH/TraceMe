@@ -1,64 +1,88 @@
 # Security
 
-TraceMe 按私有工具设计。它可以帮助整理旅行资料，但旅行计划、住宿、票据、证件、预算和备份都可能包含敏感信息，请不要把它当作公开网站直接暴露。
+TraceMe 是私有部署的旅行规划网站。它可以通过域名和 HTTPS 访问，但当前仍按“小范围使用系统”设计，不是开放注册的公众网站。
 
-## 私有部署原则
+## 访问控制
 
-- 默认只在本机、内网、VPN、Tailscale、ZeroTier 或 SSH 隧道中访问。
-- 不建议直接绑定公网 IP。
-- 如果必须公开部署，需要自行配置 HTTPS、反向代理、防火墙、强密码、监控、日志轮转、备份加密和访问审计。
-- 不要把 `.env`、SQLite 数据库、上传文件、备份文件提交到 Git 或上传到不可信网盘。
+- 默认强制登录。
+- 暂不开放注册。
+- 管理员通过 seed 创建；如未来增加后台创建用户，也应限制在可信小范围内。
+- 未完成多人权限系统前，不建议开放公众使用。
+- 如果未来公开，需要补充隐私政策、用户协议、账号系统、权限系统、滥用防护和合规审查。
 
-## 登录安全
+## 登录与会话
 
 - 密码使用 scrypt hash 存储，不保存明文密码。
-- 登录接口不会把 `passwordHash` 返回给前端。
-- session token 只保存 hash 到数据库。
-- session cookie 使用 `httpOnly` 和 `sameSite=lax`。
-- 生产环境 cookie 使用 `secure`。
+- 登录接口不返回 `passwordHash`。
+- session token 只以 hash 形式保存到数据库。
+- session cookie 使用 `httpOnly`。
+- session cookie 使用 `sameSite=lax`。
+- 生产环境 session cookie 必须 `secure`。
+- 登录失败有基础限流。
 - 修改密码后会清理其他会话。
-- 登录接口带有基础限流，E2E 可通过测试环境变量绕过。
 
-## 文件安全
+## 环境变量和密钥
+
+- `.env` 被 `.gitignore` 和 `.dockerignore` 排除。
+- Docker 镜像不打包 `.env`。
+- `SESSION_SECRET` 必须是至少 32 字符的长随机字符串。
+- `INITIAL_ADMIN_PASSWORD` 仅 seed 管理员时需要，生产环境不能使用默认弱密码。
+- 主应用容器不注入 `INITIAL_ADMIN_PASSWORD`，seed 管理员使用一次性 `seed-admin` 服务。
+- `OPENAI_API_KEY` 只能在服务端读取，不暴露给前端。
+- 不在日志中输出密码、session token、API Key 或 secret 原文。
+- 环境变量校验错误只显示变量名和规则，不显示具体 secret 值。
+
+## 文件和备份
 
 - 上传文件保存在 `storage/uploads`，不放入 `public`。
-- 下载必须经过鉴权 API，未登录无法下载文件。
-- 文件名会规范化，磁盘保存名使用随机 UUID。
-- 路径解析会拒绝 `..`、目录分隔符和非上传目录路径。
-- 允许的扩展名包括 PDF、JPG、PNG、WEBP、TXT、Markdown、DOCX、XLSX。
-- 阻止脚本、可执行文件、HTML、SVG、PHP、JAR 等危险类型。
-- 上传会校验扩展名、MIME type、文件大小和主要文件签名。
-- 删除文件记录时会同步删除磁盘文件；删除旅行时会清理该旅行上传文件。
+- 备份文件保存在 `storage/backups`，不放入 `public`。
+- 不要把 uploads、backups、`.env` 或数据库文件配置成反向代理静态目录。
+- 上传文件下载必须经过登录鉴权 API。
+- 备份下载必须经过登录鉴权 API。
+- 备份 zip 可能包含旅行行程、住宿地址、票据记录、预算和上传文件，应加密保存并避免发送给不可信服务。
+
+## 健康检查
+
+`/api/health` 只返回：
+
+- `status`
+- `timestamp`
+- `version`
+- `database.connected`
+
+不返回：
+
+- API Key
+- `SESSION_SECRET`
+- 数据库绝对路径
+- 用户信息
+- 文件路径
+- 完整环境变量
+
+## 安全响应头
+
+应用为所有路由设置基础安全响应头：
+
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Content-Security-Policy`
+
+当前 CSP 为兼容 Next.js 运行时保留了必要的 inline script/style 配置。未来若引入 nonce/hash CSP，应重新验证所有页面和第三方脚本。
 
 ## AI 安全
 
-- AI 页面有敏感信息提示。
-- AI 不会读取上传文件。
-- 不要把证件号、手机号、住址、订单号、票据全文、保险单、API Key、密码等内容粘贴给 AI。
-- 发现敏感字段时会阻止生成。
-- AI 历史只保存脱敏提示摘要和回复摘要，不保存完整原文。
-- OpenAI API Key 只从服务端环境变量读取，不暴露到前端。
-- 可使用 `AI_PROVIDER=mock` 在无外部 API 的情况下体验草稿功能。
+- AI 页面提示不要输入证件号、手机号、订单号、API Key 等敏感信息。
+- AI 不会自动读取上传文件。
+- OpenAI API Key 只从服务端环境变量读取。
+- 未配置 OpenAI Key 时可使用 mock provider 完成流程测试。
 
-## 备份安全
+## 搜索引擎
 
-- 备份保存在 `storage/backups`，不放入 `public`。
-- 备份下载必须登录。
-- 备份 zip 包含 SQLite 数据库快照和上传文件。
-- 备份不包含 `.env`、`node_modules`、`.next`、日志、缓存和现有备份文件。
-- 备份仍可能包含大量隐私数据，应加密保存，不要发给 AI 或不可信第三方。
-- 删除备份记录时会同步删除磁盘备份文件。
+当前阶段不建议搜索引擎收录：
 
-## 环境变量安全
+- `robots.txt` 默认 `Disallow: /`。
+- 页面 meta 默认 noindex。
 
-- `.env` 被 `.gitignore` 和 `.dockerignore` 排除。
-- `.env.example` 只放示例值，不放真实密钥。
-- `SESSION_SECRET` 必须是长随机字符串。
-- `INITIAL_ADMIN_PASSWORD` 必须替换为强密码。
-- `OPENAI_API_KEY` 只能放在 `.env` 或服务器密钥管理中。
-- 系统信息页只显示是否配置，不显示敏感环境变量名称和值。
-- 健康检查 API 不返回密钥、数据库路径或运行环境快照。
-
-## 不公开部署提醒
-
-TraceMe 的目标是个人自用，不是公开服务。公网部署会把登录、文件、备份、AI、导出和旅行隐私全部放到更高风险环境里。除非你已经准备好完整的 Web 安全运维能力，否则请保持默认 `127.0.0.1:3000` 绑定，并通过 SSH 隧道或私有网络访问。
+如果未来改为公开网站，需要重新配置 robots、SEO、站点地图、公开分享边界和隐私合规内容。

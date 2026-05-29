@@ -4,10 +4,9 @@ import { validateProductionEnvironment } from "@/lib/env";
 
 const validEnv = {
   DATABASE_URL: "file:/app/prisma/data/traceme.db",
-  APP_BASE_URL: "http://127.0.0.1:3000",
+  APP_BASE_URL: "https://travel.example.com",
   SESSION_SECRET: "a-random-session-secret-with-more-than-32-chars",
   INITIAL_ADMIN_USERNAME: "admin",
-  INITIAL_ADMIN_PASSWORD: "change-this-admin-password-now",
   NODE_ENV: "production",
 };
 
@@ -32,22 +31,59 @@ describe("production environment validation", () => {
     expect(result.errors).toContain(
       "SESSION_SECRET must not use the example value.",
     );
-    expect(result.errors).toContain(
+  });
+
+  it("validates initial admin password only for seed operations", () => {
+    expect(validateProductionEnvironment(validEnv).ok).toBe(true);
+
+    const missingSeedPassword = validateProductionEnvironment(validEnv, {
+      requireInitialAdminPassword: true,
+    });
+    expect(missingSeedPassword.ok).toBe(false);
+    expect(missingSeedPassword.errors).toContain(
+      "INITIAL_ADMIN_PASSWORD is required when seeding admin.",
+    );
+
+    const weakSeedPassword = validateProductionEnvironment(
+      {
+        ...validEnv,
+        INITIAL_ADMIN_PASSWORD: "change-me-before-use",
+      },
+      { requireInitialAdminPassword: true },
+    );
+    expect(weakSeedPassword.ok).toBe(false);
+    expect(weakSeedPassword.errors).toContain(
       "INITIAL_ADMIN_PASSWORD must not use the example value.",
     );
   });
 
-  it("requires a valid base URL and production runtime", () => {
+  it("requires an HTTPS base URL and production runtime", () => {
     const result = validateProductionEnvironment({
       ...validEnv,
-      APP_BASE_URL: "ftp://example.invalid",
+      APP_BASE_URL: "http://127.0.0.1:3000",
       NODE_ENV: "development",
     });
 
     expect(result.ok).toBe(false);
-    expect(result.errors).toContain("APP_BASE_URL must use http or https.");
+    expect(result.errors).toContain(
+      "APP_BASE_URL must use https in production.",
+    );
     expect(result.errors).toContain(
       "NODE_ENV must be production for private deployment.",
+    );
+  });
+
+  it("rejects invalid base URLs and short session secrets", () => {
+    const result = validateProductionEnvironment({
+      ...validEnv,
+      APP_BASE_URL: "not-a-url",
+      SESSION_SECRET: "short",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain("APP_BASE_URL must be a valid URL.");
+    expect(result.errors).toContain(
+      "SESSION_SECRET must be at least 32 characters.",
     );
   });
 });

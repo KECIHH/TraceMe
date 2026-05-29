@@ -5,7 +5,7 @@ $Branch = if ($env:TRACEME_BRANCH) { $env:TRACEME_BRANCH } else { "main" }
 $InstallDir = if ($env:TRACEME_DIR) { $env:TRACEME_DIR } else { Join-Path $HOME "traceme" }
 $TraceMePort = if ($env:TRACEME_PORT) { $env:TRACEME_PORT } else { "3000" }
 $TraceMeBind = if ($env:TRACEME_BIND) { $env:TRACEME_BIND } else { "127.0.0.1" }
-$AppBaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "http://127.0.0.1:$TraceMePort" }
+$AppBaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "" }
 $AdminUsername = if ($env:INITIAL_ADMIN_USERNAME) { $env:INITIAL_ADMIN_USERNAME } else { "admin" }
 $SeedExampleTrip = if ($env:SEED_EXAMPLE_TRIP) { $env:SEED_EXAMPLE_TRIP } else { "true" }
 $BuildRetries = if ($env:TRACEME_BUILD_RETRIES) { [int]$env:TRACEME_BUILD_RETRIES } else { 3 }
@@ -192,6 +192,10 @@ SEED_EXAMPLE_TRIP="$SeedExampleTrip"
 Require-Command git
 Require-Command docker
 
+if (-not $AppBaseUrl -and -not (Test-Path -LiteralPath (Join-Path $InstallDir ".env"))) {
+  throw "APP_BASE_URL is required for production installs. Example: `$env:APP_BASE_URL='https://travel.example.com'; .\scripts\bootstrap-windows.ps1"
+}
+
 docker compose version | Out-Null
 if ($LASTEXITCODE -ne 0) {
   throw "Docker Compose v2 is required. Install Docker Desktop or the docker compose plugin first."
@@ -236,7 +240,7 @@ if ($UseLocalBuild -eq "true") {
 Wait-ForHealth
 
 Write-Host "Running initial admin seed ..."
-docker compose exec -T travel-planner node scripts/seed-admin.mjs
+docker compose run --rm seed-admin
 
 $savedAppBaseUrl = Read-EnvValue -Path ".env" -Key "APP_BASE_URL"
 $savedAdminUsername = Read-EnvValue -Path ".env" -Key "INITIAL_ADMIN_USERNAME"

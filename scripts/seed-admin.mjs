@@ -4,6 +4,8 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const KEY_LENGTH = 64;
+const DEFAULT_ADMIN_PASSWORD = "change-me-before-use";
+const MIN_INITIAL_ADMIN_PASSWORD_LENGTH = 12;
 const EXAMPLE_TRIP_TITLE = "示例旅行（虚构数据）";
 
 async function main() {
@@ -17,6 +19,7 @@ async function main() {
       "INITIAL_ADMIN_USERNAME and INITIAL_ADMIN_PASSWORD must be set before seeding.",
     );
   }
+  validateSeedPassword(password);
 
   const existingUser = await prisma.user.findUnique({ where: { username } });
 
@@ -353,6 +356,21 @@ async function createExampleTrip() {
       },
     });
   });
+}
+
+function validateSeedPassword(password) {
+  if (password.length < MIN_INITIAL_ADMIN_PASSWORD_LENGTH) {
+    throw new Error(
+      `INITIAL_ADMIN_PASSWORD must be at least ${MIN_INITIAL_ADMIN_PASSWORD_LENGTH} characters.`,
+    );
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    password === DEFAULT_ADMIN_PASSWORD
+  ) {
+    throw new Error("INITIAL_ADMIN_PASSWORD must not use the example value.");
+  }
 }
 
 function hashPassword(password) {

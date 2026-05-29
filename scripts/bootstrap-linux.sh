@@ -6,7 +6,7 @@ BRANCH="${TRACEME_BRANCH:-main}"
 INSTALL_DIR="${TRACEME_DIR:-$HOME/traceme}"
 TRACEME_PORT="${TRACEME_PORT:-3000}"
 TRACEME_BIND="${TRACEME_BIND:-127.0.0.1}"
-APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:${TRACEME_PORT}}"
+APP_BASE_URL="${APP_BASE_URL:-}"
 ADMIN_USERNAME="${INITIAL_ADMIN_USERNAME:-admin}"
 SEED_EXAMPLE_TRIP="${SEED_EXAMPLE_TRIP:-true}"
 BUILD_RETRIES="${TRACEME_BUILD_RETRIES:-3}"
@@ -239,6 +239,12 @@ EOF_ENV
 need_command git
 need_command docker
 
+if [ -z "$APP_BASE_URL" ] && [ ! -f "$INSTALL_DIR/.env" ]; then
+  echo "APP_BASE_URL is required for production installs. Example:" >&2
+  echo "  APP_BASE_URL=https://travel.example.com bash scripts/bootstrap-linux.sh" >&2
+  exit 1
+fi
+
 if ! docker compose version >/dev/null 2>&1; then
   echo "Docker Compose v2 is required. Install Docker Desktop or the docker compose plugin first." >&2
   exit 1
@@ -282,7 +288,7 @@ fi
 wait_for_health
 
 echo "Running initial admin seed ..."
-docker_compose exec -T travel-planner node scripts/seed-admin.mjs
+docker_compose run --rm seed-admin
 
 saved_app_base_url="$(read_env_value APP_BASE_URL .env || true)"
 saved_admin_username="$(read_env_value INITIAL_ADMIN_USERNAME .env || true)"

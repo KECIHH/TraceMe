@@ -1,8 +1,104 @@
 # Deployment
 
-TraceMe 默认用于本地或私有服务器部署。请优先使用本机访问、SSH 隧道、VPN、Tailscale 或 ZeroTier，不建议直接开放到公网。
+TraceMe 当前定位为私有部署的旅行规划网站。生产环境可以通过公网域名访问，但必须放在 HTTPS 反向代理后面，并保持强制登录、关闭公众注册和默认 noindex。
 
-## 本地运行
+推荐访问链路：
+
+```text
+浏览器 -> HTTPS 域名 -> 反向代理 -> 127.0.0.1:3000 -> Next.js 应用
+```
+
+## 生产 Docker Compose
+
+准备 `.env`：
+
+```bash
+cp .env.example .env
+```
+
+至少设置：
+
+```env
+APP_BASE_URL="https://travel.example.com"
+SESSION_SECRET="replace-with-a-long-random-secret-at-least-32-chars"
+INITIAL_ADMIN_USERNAME="admin"
+INITIAL_ADMIN_PASSWORD="replace-with-a-strong-admin-password"
+```
+
+启动：
+
+```bash
+docker compose build
+docker compose up -d
+docker compose run --rm seed-admin
+```
+
+Compose 默认：
+
+- 绑定 `127.0.0.1:3000:3000`，供本机反向代理访问。
+- `NODE_ENV=production`。
+- `restart: unless-stopped`。
+- SQLite 数据库使用 `sqlite-data` volume。
+- 上传文件使用 `uploads-data` volume。
+- 备份文件使用 `backups-data` volume。
+- 不默认开放数据库端口。
+- 不把 `.env`、uploads、backups 或数据库文件打进镜像。
+
+## 生产启动流程
+
+容器启动入口是：
+
+```bash
+node scripts/start-production.mjs
+```
+
+启动顺序：
+
+1. 运行 `scripts/validate-production-env.mjs` 校验生产环境变量。
+2. 运行 `scripts/ensure-sqlite-db.mjs` 确保 SQLite 文件目录存在。
+3. 运行 `prisma migrate deploy` 执行 migration。
+4. 启动 Next.js standalone server。
+
+管理员 seed 单独执行：
+
+```bash
+docker compose run --rm seed-admin
+```
+
+如需重置管理员密码：
+
+```bash
+RESET_ADMIN_PASSWORD=true docker compose run --rm seed-admin
+```
+
+## 环境变量校验
+
+生产启动会校验：
+
+- `DATABASE_URL`
+- `APP_BASE_URL`
+- `SESSION_SECRET`
+- `INITIAL_ADMIN_USERNAME`
+- `NODE_ENV`
+
+seed 管理员时额外要求：
+
+- `INITIAL_ADMIN_PASSWORD`
+
+可选：
+
+- `OPENAI_API_KEY`
+- `DOCUMENT_ENCRYPTION_KEY`
+
+规则：
+
+- `APP_BASE_URL` 在生产环境必须是 HTTPS URL。
+- `SESSION_SECRET` 至少 32 字符。
+- 生产环境不能使用示例 `SESSION_SECRET` 或示例管理员密码。
+- 错误信息只说明变量名和规则，不打印 secret 原文。
+- 主应用服务不会注入 `INITIAL_ADMIN_PASSWORD`；该变量只在 `seed-admin` 一次性服务中使用。
+
+## 本地开发
 
 ```bash
 npm install
@@ -13,131 +109,15 @@ npm run db:seed
 npm run dev
 ```
 
-Windows PowerShell 复制环境文件：
-
-```powershell
-Copy-Item .env.example .env
-```
-
-访问：
+本地开发可使用：
 
 ```text
 http://localhost:3000
 ```
 
-健康检查：
+生产环境不要使用 HTTP `APP_BASE_URL`。
 
-```text
-http://localhost:3000/api/health
-```
-
-## Docker 部署
-
-### 一条命令安装
-
-脚本会自动完成 clone/pull、生成 `.env`、拉取预构建镜像、启动容器和初始化管理员。需要先安装 Git、Docker 和 Docker Compose v2。
-
-Linux / 云服务器：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh | bash
-```
-
-Windows PowerShell：
-
-```powershell
-irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
-```
-
-默认安装目录是 `~/traceme`，默认访问地址是：
-
-```text
-http://127.0.0.1:3000
-```
-
-可选环境变量：
-
-- `TRACEME_REPO`：Git 仓库地址，默认 `https://github.com/KECIHH/TraceMe.git`。
-- `TRACEME_BRANCH`：部署分支，默认 `main`。
-- `TRACEME_DIR`：安装目录，默认 `~/traceme`。
-- `TRACEME_PORT`：宿主机端口，默认 `3000`。
-- `TRACEME_BIND`：宿主机监听地址，默认 `127.0.0.1`。
-- `TRACEME_IMAGE`：预构建 Docker 镜像，默认 `ghcr.io/kecihh/traceme:main`。
-- `TRACEME_USE_LOCAL_BUILD=true`：不拉预构建镜像，改为在服务器本地构建。
-- `APP_BASE_URL`：浏览器访问地址，默认 `http://127.0.0.1:3000`。
-- `INITIAL_ADMIN_USERNAME`：初始管理员用户名，默认 `admin`。
-- `SEED_EXAMPLE_TRIP`：是否创建示例旅行，默认 `true`。
-- `TRACEME_BUILD_RETRIES`：Docker 构建失败时的重试次数，默认 `3`。
-- `NPM_CONFIG_REGISTRY`：Docker 构建时使用的 npm registry。一键脚本默认使用 `https://registry.npmmirror.com`。
-- `ALPINE_REPOSITORY_MIRROR`：Docker 构建时使用的 Alpine 软件源。一键脚本默认使用 `https://mirrors.aliyun.com/alpine`。
-- `BUILD_NODE_OPTIONS`：Docker 构建阶段的 Node 内存参数，默认 `--max-old-space-size=1024`。
-- `TRACEME_SWAP_SIZE_GB`：Linux 一键脚本自动创建的 swap 大小，默认 `4`。
-- `TRACEME_SKIP_SWAP=true`：跳过自动 swap 设置。
-
-示例：部署到服务器 `/opt/traceme`，监听 `8080` 并允许外部访问：
-
-```bash
-TRACEME_DIR=/opt/traceme TRACEME_PORT=8080 TRACEME_BIND=0.0.0.0 APP_BASE_URL=http://your-server-ip:8080 \
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh)"
-```
-
-PowerShell：
-
-```powershell
-$env:TRACEME_DIR="C:\traceme"; $env:TRACEME_PORT="8080"; $env:TRACEME_BIND="0.0.0.0"; $env:APP_BASE_URL="http://your-server-ip:8080"; irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
-```
-
-如果仓库是私有仓库，公开 raw 链接或 GHCR 镜像可能无法直接访问。可以先在目标机器登录 GitHub / GHCR，改用带权限的 `TRACEME_REPO`，或设置 `TRACEME_USE_LOCAL_BUILD=true` 在服务器本地构建。
-
-### 手动部署
-
-编辑 `.env`，替换默认密码和密钥后执行：
-
-```bash
-docker compose pull
-docker compose up -d --no-build
-docker compose exec travel-planner node scripts/seed-admin.mjs
-```
-
-默认访问：
-
-```text
-http://127.0.0.1:3000
-```
-
-Compose 默认端口绑定：
-
-```yaml
-127.0.0.1:3000:3000
-```
-
-这意味着服务只暴露给服务器本机。远程访问请使用 SSH 隧道或私有网络。
-
-## 环境变量
-
-必填：
-
-- `DATABASE_URL`：SQLite 连接字符串。本地默认 `file:./dev.db`；Docker 默认 `file:/app/prisma/data/traceme.db`。
-- `APP_BASE_URL`：应用访问地址。
-- `SESSION_SECRET`：长随机字符串。
-- `INITIAL_ADMIN_USERNAME`：初始管理员用户名。
-- `INITIAL_ADMIN_PASSWORD`：初始管理员密码。
-
-可选：
-
-- `RESET_ADMIN_PASSWORD=true`：重新 seed 时重置管理员密码。
-- `SEED_EXAMPLE_TRIP=false`：跳过虚构示例旅行。
-- `AI_PROVIDER=openai|mock`：AI provider。
-- `OPENAI_API_KEY`：OpenAI API Key，仅服务端读取。
-- `OPENAI_MODEL`：OpenAI 模型名。
-- `AI_FEATURE_ENABLED=true|false`：AI 功能默认开关。
-- `MAX_UPLOAD_FILE_SIZE_BYTES`：单文件上传上限。
-- `MAX_TRIP_DOCUMENT_STORAGE_BYTES`：单旅行文件总量上限。
-- `DOCUMENT_ENCRYPTION_KEY`：预留文件加密密钥配置。
-
-生产环境启动会运行 `scripts/validate-production-env.mjs`，用于阻止明显不安全的默认配置。
-
-## 数据库迁移
+## 数据库 migration
 
 开发环境：
 
@@ -145,86 +125,52 @@ Compose 默认端口绑定：
 npm run db:migrate
 ```
 
-生产或 Docker：
+生产环境：
 
 ```bash
 npm run db:deploy
 ```
 
-创建管理员和示例旅行：
+Docker 容器启动时会自动执行 `prisma migrate deploy`。更新部署后仍建议查看日志确认 migration 成功。
 
-```bash
-npm run db:seed
-```
+## 健康检查
 
-Docker 中：
-
-```bash
-docker compose exec travel-planner node scripts/seed-admin.mjs
-```
-
-## SSH 隧道访问
-
-如果应用部署在远程服务器，并且 Compose 仍绑定 `127.0.0.1:3000`：
-
-```bash
-ssh -L 3000:127.0.0.1:3000 user@your-server
-```
-
-然后在本机浏览器打开：
+健康检查接口：
 
 ```text
-http://127.0.0.1:3000
+/api/health
 ```
 
-## 持久化目录
+返回：
 
-Docker Compose 使用三个 volume：
+- `status`
+- `timestamp`
+- `version`
+- `database.connected`
 
-- `sqlite-data`：SQLite 数据库。
-- `uploads-data`：上传文件。
-- `backups-data`：系统备份。
+不会返回 API Key、`SESSION_SECRET`、数据库绝对路径、用户信息、文件路径或完整环境变量。
 
-本地开发对应：
+## 反向代理和 HTTPS
 
-- `prisma/dev.db`
-- `storage/uploads`
-- `storage/backups`
+域名、DNS、Caddy/Nginx 示例和 HTTPS 续期说明见 [DOMAIN_AND_HTTPS.md](DOMAIN_AND_HTTPS.md)。
 
-这些目录和文件都不应提交到 Git。
+## 静态资源边界
 
-## 备份与恢复
-
-系统备份可在设置中心创建。备份 zip 包含：
-
-- `manifest.json`
-- SQLite 数据库快照
-- `storage/uploads` 中的上传文件
-
-备份不会包含：
+只允许 `public` 中的公开资源由 Next.js 静态服务提供。不要把以下路径配置到 Caddy/Nginx 静态目录：
 
 - `.env`
-- `node_modules`
-- `.next`
-- 日志和缓存
-- 现有备份文件
+- SQLite 数据库文件
+- `storage/uploads`
+- `storage/backups`
+- 任何备份 zip
 
-恢复思路：
+上传文件和备份文件必须通过应用鉴权 API 访问。
 
-1. 停止应用。
-2. 解压备份。
-3. 用备份中的数据库文件替换当前 SQLite 数据库。
-4. 用备份中的 `storage/uploads` 替换或合并当前上传目录。
-5. 确认 `.env` 使用当前服务器的真实密钥和密码。
-6. 启动应用并访问 `/api/health`。
+## 搜索引擎
 
-## 常见问题
+当前阶段不建议搜索引擎收录：
 
-- 无法登录：确认已执行 seed，且 `.env` 中的用户名密码正确；如果要重置密码，设置 `RESET_ADMIN_PASSWORD=true` 后重新运行 seed。
-- Playwright 缺浏览器：执行 `npx playwright install chromium`。
-- Docker 启动失败：检查 `SESSION_SECRET` 和 `INITIAL_ADMIN_PASSWORD` 是否仍是默认值。
-- Docker 构建出现 `short read` / `unexpected EOF`：通常是服务器拉取 Docker Hub 基础镜像时网络中断。先重试同一条一键部署命令；如果仍失败，执行 `cd /root/traceme && docker builder prune -f && docker image rm node:lts-alpine || true` 后再重试。阿里云服务器建议配置 Docker 镜像加速器后重启 Docker。
-- 服务器构建时卡死或只能强制重启：通常是 ECS 内存不足。一键脚本默认拉取 GitHub Actions 预构建镜像，不在服务器构建；只有 `TRACEME_USE_LOCAL_BUILD=true` 时才会创建 `/swapfile.traceme` 并本地构建。
-- 上传失败：检查文件扩展名、MIME type、文件大小和 `storage/uploads` 写权限。
-- 备份失败：检查 SQLite 数据库文件是否存在，`storage/backups` 是否可写。
-- 远程访问失败：默认只监听远程服务器的 `127.0.0.1`，需要 SSH 隧道或私有网络。
+- `public/robots.txt` 默认 `Disallow: /`。
+- 页面 metadata 默认 noindex。
+
+如果未来公开，需要重新配置 robots、SEO、站点地图、隐私政策、用户协议和公开分享规则。

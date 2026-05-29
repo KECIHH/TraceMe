@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { metadata } from "../../src/app/layout";
 import { securityHeaders } from "../../next.config";
 
 const root = process.cwd();
@@ -26,10 +27,19 @@ describe("private deployment configuration", () => {
     expect(compose).not.toContain('"0.0.0.0:3000:3000"');
     expect(compose).toContain("DATABASE_URL: file:/app/prisma/data/traceme.db");
     expect(compose).not.toContain("DATABASE_URL: ${DATABASE_URL");
+    expect(compose).toContain("APP_BASE_URL: ${APP_BASE_URL:?");
     expect(compose).toContain("sqlite-data:/app/prisma/data");
     expect(compose).toContain("uploads-data:/app/storage/uploads");
     expect(compose).toContain("backups-data:/app/storage/backups");
-    expect(compose).toContain("env_file:");
+    expect(compose).not.toContain("env_file:");
+    expect(compose).toContain("seed-admin:");
+    expect(compose).toContain("profiles:");
+
+    const travelPlannerService = compose
+      .split("  travel-planner:")[1]
+      ?.split("  seed-admin:")[0];
+    expect(travelPlannerService).toBeDefined();
+    expect(travelPlannerService).not.toContain("INITIAL_ADMIN_PASSWORD");
   });
 
   it("excludes secrets and private files from the Docker build context", () => {
@@ -42,17 +52,18 @@ describe("private deployment configuration", () => {
 
   it("starts the container with migration deploy but does not auto-seed", () => {
     const dockerfile = readProjectFile("Dockerfile");
-    const commandLine = dockerfile
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("CMD ")) ?? "";
+    const startScript = readProjectFile("scripts/start-production.mjs");
 
-    expect(commandLine).toContain("prisma migrate deploy");
-    expect(commandLine).not.toContain("seed-admin");
+    expect(startScript).toContain("scripts/validate-production-env.mjs");
+    expect(startScript).toContain('"migrate", "deploy"');
+    expect(startScript).not.toContain("seed-admin");
     expect(dockerfile).toContain("USER nextjs");
     expect(dockerfile).toContain("EXPOSE 3000");
     expect(dockerfile).toContain("ARG BUILD_NODE_OPTIONS");
     expect(dockerfile).toContain("npm prune --omit=dev");
     expect(dockerfile).toContain("scripts/validate-production-env.mjs");
+    expect(dockerfile).toContain("scripts/start-production.mjs");
+    expect(dockerfile).toContain('CMD ["node", "scripts/start-production.mjs"]');
     expect(dockerfile).not.toContain("COPY --from=builder /app/scripts ./scripts");
   });
 
@@ -67,14 +78,14 @@ describe("private deployment configuration", () => {
     expect(linuxBootstrap).toContain("DOCKER_BUILDKIT=0 COMPOSE_DOCKER_CLI_BUILD=0");
     expect(linuxBootstrap).toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker compose build travel-planner");
     expect(linuxBootstrap).not.toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker_compose");
-    expect(linuxBootstrap).toContain("seed-admin.mjs");
+    expect(linuxBootstrap).toContain("docker_compose run --rm seed-admin");
     expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
 
     expect(windowsBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
     expect(windowsBootstrap).toContain("ghcr.io/kecihh/traceme:main");
     expect(windowsBootstrap).toContain("docker compose up -d --no-build");
     expect(windowsBootstrap).toContain("docker compose up -d --build");
-    expect(windowsBootstrap).toContain("seed-admin.mjs");
+    expect(windowsBootstrap).toContain("docker compose run --rm seed-admin");
     expect(windowsBootstrap).toContain('"127.0.0.1"');
   });
 });
@@ -90,7 +101,24 @@ describe("security headers", () => {
           key: "Permissions-Policy",
           value: "camera=(), microphone=(), geolocation=()",
         },
+        {
+          key: "Content-Security-Policy",
+          value: expect.stringContaining("frame-ancestors 'none'"),
+        },
       ]),
     );
+  });
+});
+
+describe("robots and indexing policy", () => {
+  it("blocks search engines by default", () => {
+    const robots = readProjectFile("public/robots.txt");
+
+    expect(robots).toContain("User-agent: *");
+    expect(robots).toContain("Disallow: /");
+  });
+
+  it("marks pages as noindex by default", () => {
+    expect(metadata.robots).toEqual({ index: false, follow: false });
   });
 });

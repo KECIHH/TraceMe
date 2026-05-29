@@ -96,19 +96,8 @@ export function shouldUseSecureCookies(
   nodeEnv = process.env.NODE_ENV,
   appBaseUrl = process.env.APP_BASE_URL,
 ) {
-  if (nodeEnv !== "production") {
-    return false;
-  }
-
-  if (!appBaseUrl) {
-    return true;
-  }
-
-  try {
-    return new URL(appBaseUrl).protocol === "https:";
-  } catch {
-    return true;
-  }
+  void appBaseUrl;
+  return nodeEnv === "production";
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
