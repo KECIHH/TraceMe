@@ -65,6 +65,7 @@ http://127.0.0.1:3000
 - `APP_BASE_URL`：浏览器访问地址，默认 `http://127.0.0.1:3000`。
 - `INITIAL_ADMIN_USERNAME`：初始管理员用户名，默认 `admin`。
 - `SEED_EXAMPLE_TRIP`：是否创建示例旅行，默认 `true`。
+- `TRACEME_BUILD_RETRIES`：Docker 构建失败时的重试次数，默认 `3`。
 
 示例：部署到服务器 `/opt/traceme`，监听 `8080` 并允许外部访问：
 
@@ -215,6 +216,7 @@ Docker Compose 使用三个 volume：
 - 无法登录：确认已执行 seed，且 `.env` 中的用户名密码正确；如果要重置密码，设置 `RESET_ADMIN_PASSWORD=true` 后重新运行 seed。
 - Playwright 缺浏览器：执行 `npx playwright install chromium`。
 - Docker 启动失败：检查 `SESSION_SECRET` 和 `INITIAL_ADMIN_PASSWORD` 是否仍是默认值。
+- Docker 构建出现 `short read` / `unexpected EOF`：通常是服务器拉取 Docker Hub 基础镜像时网络中断。先重试同一条一键部署命令；如果仍失败，执行 `cd /root/traceme && docker builder prune -f && docker image rm node:lts-alpine || true` 后再重试。阿里云服务器建议配置 Docker 镜像加速器后重启 Docker。
 - 上传失败：检查文件扩展名、MIME type、文件大小和 `storage/uploads` 写权限。
 - 备份失败：检查 SQLite 数据库文件是否存在，`storage/backups` 是否可写。
 - 远程访问失败：默认只监听远程服务器的 `127.0.0.1`，需要 SSH 隧道或私有网络。

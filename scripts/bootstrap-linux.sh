@@ -9,6 +9,7 @@ TRACEME_BIND="${TRACEME_BIND:-127.0.0.1}"
 APP_BASE_URL="${APP_BASE_URL:-http://127.0.0.1:${TRACEME_PORT}}"
 ADMIN_USERNAME="${INITIAL_ADMIN_USERNAME:-admin}"
 SEED_EXAMPLE_TRIP="${SEED_EXAMPLE_TRIP:-true}"
+BUILD_RETRIES="${TRACEME_BUILD_RETRIES:-3}"
 
 need_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -52,6 +53,47 @@ wait_for_health() {
 
   echo "TraceMe did not become healthy in time. Showing recent logs:" >&2
   docker_compose logs --tail=80 travel-planner >&2
+  exit 1
+}
+
+show_build_network_help() {
+  cat >&2 <<'EOF_HELP'
+
+Docker build failed. If the error mentions "short read", "unexpected EOF",
+"TLS handshake timeout", or a very slow node:lts-alpine download, the server
+probably cannot download Docker Hub layers reliably.
+
+Try one of these on the server, then rerun the same TraceMe install command:
+
+  cd /root/traceme
+  docker builder prune -f
+  docker image rm node:lts-alpine || true
+  docker compose up -d --build
+
+On Alibaba Cloud, also consider configuring a Docker registry mirror in
+/etc/docker/daemon.json, then restart Docker:
+
+  sudo systemctl restart docker
+
+EOF_HELP
+}
+
+build_and_start() {
+  for attempt in $(seq 1 "$BUILD_RETRIES"); do
+    echo "Docker build/start attempt ${attempt}/${BUILD_RETRIES} ..."
+
+    if docker pull node:lts-alpine >/dev/null 2>&1 && docker_compose up -d --build; then
+      return
+    fi
+
+    if [ "$attempt" -lt "$BUILD_RETRIES" ]; then
+      echo "Build failed, retrying after a short pause ..."
+      docker image rm node:lts-alpine >/dev/null 2>&1 || true
+      sleep 5
+    fi
+  done
+
+  show_build_network_help
   exit 1
 }
 
@@ -130,7 +172,7 @@ else
 fi
 
 echo "Building and starting TraceMe ..."
-docker_compose up -d --build
+build_and_start
 
 wait_for_health
 

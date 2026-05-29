@@ -8,6 +8,7 @@ $TraceMeBind = if ($env:TRACEME_BIND) { $env:TRACEME_BIND } else { "127.0.0.1" }
 $AppBaseUrl = if ($env:APP_BASE_URL) { $env:APP_BASE_URL } else { "http://127.0.0.1:$TraceMePort" }
 $AdminUsername = if ($env:INITIAL_ADMIN_USERNAME) { $env:INITIAL_ADMIN_USERNAME } else { "admin" }
 $SeedExampleTrip = if ($env:SEED_EXAMPLE_TRIP) { $env:SEED_EXAMPLE_TRIP } else { "true" }
+$BuildRetries = if ($env:TRACEME_BUILD_RETRIES) { [int]$env:TRACEME_BUILD_RETRIES } else { 3 }
 
 function Require-Command {
   param([string]$Name)
@@ -46,6 +47,40 @@ function Wait-ForHealth {
 
   Write-Host "TraceMe did not become healthy in time. Recent logs:" -ForegroundColor Red
   docker compose logs --tail=80 travel-planner
+  exit 1
+}
+
+function Show-BuildNetworkHelp {
+  Write-Host ""
+  Write-Host "Docker build failed. If the error mentions short read, unexpected EOF, or timeout, Docker Hub downloads may be unstable." -ForegroundColor Red
+  Write-Host "Try this, then rerun the same TraceMe install command:"
+  Write-Host "  cd `"$InstallDir`""
+  Write-Host "  docker builder prune -f"
+  Write-Host "  docker image rm node:lts-alpine"
+  Write-Host "  docker compose up -d --build"
+  Write-Host ""
+}
+
+function Start-TraceMeContainer {
+  for ($attempt = 1; $attempt -le $BuildRetries; $attempt++) {
+    Write-Host "Docker build/start attempt $attempt/$BuildRetries ..."
+
+    docker pull node:lts-alpine *> $null
+    if ($LASTEXITCODE -eq 0) {
+      docker compose up -d --build
+      if ($LASTEXITCODE -eq 0) {
+        return
+      }
+    }
+
+    if ($attempt -lt $BuildRetries) {
+      Write-Host "Build failed, retrying after a short pause ..."
+      docker image rm node:lts-alpine *> $null
+      Start-Sleep -Seconds 5
+    }
+  }
+
+  Show-BuildNetworkHelp
   exit 1
 }
 
@@ -136,7 +171,7 @@ if (-not (Test-Path -LiteralPath ".env")) {
 }
 
 Write-Host "Building and starting TraceMe ..."
-docker compose up -d --build
+Start-TraceMeContainer
 
 Wait-ForHealth
 
