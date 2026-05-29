@@ -58,7 +58,8 @@ describe("private deployment configuration", () => {
     const windowsBootstrap = readProjectFile("scripts/bootstrap-windows.ps1");
 
     expect(linuxBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
-    expect(linuxBootstrap).toContain("docker_compose up -d --build");
+    expect(linuxBootstrap).toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker compose up -d --build");
+    expect(linuxBootstrap).not.toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker_compose");
     expect(linuxBootstrap).toContain("seed-admin.mjs");
     expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
 

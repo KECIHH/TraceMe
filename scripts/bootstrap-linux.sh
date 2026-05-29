@@ -85,7 +85,7 @@ build_and_start() {
   for attempt in $(seq 1 "$BUILD_RETRIES"); do
     echo "Docker build/start attempt ${attempt}/${BUILD_RETRIES} ..."
 
-    if docker pull node:lts-alpine >/dev/null 2>&1 && timeout "$BUILD_ATTEMPT_TIMEOUT" docker_compose up -d --build; then
+    if docker pull node:lts-alpine >/dev/null 2>&1 && timeout "$BUILD_ATTEMPT_TIMEOUT" docker compose up -d --build; then
       return
     fi
 
