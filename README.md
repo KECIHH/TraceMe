@@ -109,18 +109,45 @@ npm run db:deploy
 
 ## 部署方式
 
-本地私有部署可以直接使用 `npm run build && npm run start`。服务器私有部署推荐 Docker Compose：
+本地 PC 或云服务器推荐使用 Docker Compose。最快方式是一条命令拉取 GitHub 仓库、生成 `.env`、构建镜像、启动服务并创建初始管理员。
+
+Linux / 云服务器：
 
 ```bash
-docker compose build
-docker compose up -d
-docker compose exec travel-planner node scripts/seed-admin.mjs
+curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh | bash
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
 ```
 
 默认访问地址：
 
 ```text
 http://127.0.0.1:3000
+```
+
+脚本默认安装到 `~/traceme`，只监听本机回环地址。需要改目录、端口或允许局域网/公网访问时，可以在执行前设置环境变量，例如：
+
+```bash
+TRACEME_DIR=/opt/traceme TRACEME_PORT=8080 TRACEME_BIND=0.0.0.0 APP_BASE_URL=http://your-server-ip:8080 \
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-linux.sh)"
+```
+
+PowerShell：
+
+```powershell
+$env:TRACEME_DIR="C:\traceme"; $env:TRACEME_PORT="8080"; $env:TRACEME_BIND="0.0.0.0"; $env:APP_BASE_URL="http://your-server-ip:8080"; irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-windows.ps1 | iex
+```
+
+如果已经克隆了项目，也可以手动部署：
+
+```bash
+docker compose build
+docker compose up -d
+docker compose exec travel-planner node scripts/seed-admin.mjs
 ```
 
 `docker-compose.yml` 默认只监听本机回环地址，适合配合 SSH 隧道、VPN、Tailscale、ZeroTier 或内网访问。完整说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。

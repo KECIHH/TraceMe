@@ -16,7 +16,9 @@ describe("private deployment configuration", () => {
     const compose = readProjectFile("docker-compose.yml");
 
     expect(compose).toContain("travel-planner:");
-    expect(compose).toContain('"127.0.0.1:3000:3000"');
+    expect(compose).toContain(
+      '"${TRACEME_BIND:-127.0.0.1}:${TRACEME_PORT:-3000}:3000"',
+    );
     expect(compose).not.toContain('"0.0.0.0:3000:3000"');
     expect(compose).toContain("DATABASE_URL: file:/app/prisma/data/traceme.db");
     expect(compose).not.toContain("DATABASE_URL: ${DATABASE_URL");
@@ -46,6 +48,21 @@ describe("private deployment configuration", () => {
     expect(dockerfile).toContain("EXPOSE 3000");
     expect(dockerfile).toContain("scripts/validate-production-env.mjs");
     expect(dockerfile).not.toContain("COPY --from=builder /app/scripts ./scripts");
+  });
+
+  it("includes one-command bootstrap scripts for server and Windows installs", () => {
+    const linuxBootstrap = readProjectFile("scripts/bootstrap-linux.sh");
+    const windowsBootstrap = readProjectFile("scripts/bootstrap-windows.ps1");
+
+    expect(linuxBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
+    expect(linuxBootstrap).toContain("docker_compose up -d --build");
+    expect(linuxBootstrap).toContain("seed-admin.mjs");
+    expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
+
+    expect(windowsBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
+    expect(windowsBootstrap).toContain("docker compose up -d --build");
+    expect(windowsBootstrap).toContain("seed-admin.mjs");
+    expect(windowsBootstrap).toContain('"127.0.0.1"');
   });
 });
 
