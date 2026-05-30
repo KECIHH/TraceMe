@@ -39,7 +39,7 @@ RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinel
   && apk add --no-cache openssl \
   && addgroup -S nodejs \
   && adduser -S nextjs -G nodejs \
-  && mkdir -p /app/node_modules/.bin /app/prisma/data /app/storage/uploads /app/storage/backups \
+  && mkdir -p /app/node_modules/.bin /app/prisma/data /app/storage/uploads /app/storage/backups /app/storage/secrets \
   && chown -R nextjs:nodejs /app/prisma/data /app/storage
 
 ENV NODE_ENV=production
@@ -52,6 +52,7 @@ COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/scripts/ensure-sqlite-db.mjs ./scripts/ensure-sqlite-db.mjs
+COPY --from=builder /app/scripts/ensure-production-secrets.mjs ./scripts/ensure-production-secrets.mjs
 COPY --from=builder /app/scripts/seed-admin.mjs ./scripts/seed-admin.mjs
 COPY --from=builder /app/scripts/start-production.mjs ./scripts/start-production.mjs
 COPY --from=builder /app/scripts/validate-production-env.mjs ./scripts/validate-production-env.mjs

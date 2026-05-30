@@ -2,8 +2,11 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { ensureDocumentEncryptionKey } from "./ensure-production-secrets.mjs";
+
 const root = process.cwd();
 
+await ensureDocumentEncryptionKey();
 run("node", ["scripts/validate-production-env.mjs"]);
 run("node", ["scripts/ensure-sqlite-db.mjs"]);
 run("npx", ["prisma", "migrate", "deploy"]);

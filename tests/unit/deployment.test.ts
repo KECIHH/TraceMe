@@ -30,9 +30,13 @@ describe("private deployment configuration", () => {
     expect(compose).toContain("APP_BASE_URL: ${APP_BASE_URL:?");
     expect(compose).toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}");
     expect(compose).not.toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?");
+    expect(compose).toContain(
+      "DOCUMENT_ENCRYPTION_KEY_FILE: /app/storage/secrets/document-encryption-key",
+    );
     expect(compose).toContain("sqlite-data:/app/prisma/data");
     expect(compose).toContain("uploads-data:/app/storage/uploads");
     expect(compose).toContain("backups-data:/app/storage/backups");
+    expect(compose).toContain("secrets-data:/app/storage/secrets");
     expect(compose).not.toContain("env_file:");
     expect(compose).toContain("seed-admin:");
     expect(compose).toContain("profiles:");
@@ -50,12 +54,16 @@ describe("private deployment configuration", () => {
     expect(dockerignore).toContain(".env");
     expect(dockerignore).toContain("storage/uploads/*");
     expect(dockerignore).toContain("storage/backups/*");
+    expect(dockerignore).toContain("storage/secrets/*");
   });
 
   it("starts the container with migration deploy but does not auto-seed", () => {
     const dockerfile = readProjectFile("Dockerfile");
     const startScript = readProjectFile("scripts/start-production.mjs");
 
+    expect(startScript.indexOf("ensureDocumentEncryptionKey")).toBeLessThan(
+      startScript.indexOf("scripts/validate-production-env.mjs"),
+    );
     expect(startScript).toContain("scripts/validate-production-env.mjs");
     expect(startScript).toContain('"migrate", "deploy"');
     expect(startScript).not.toContain("seed-admin");
@@ -63,6 +71,7 @@ describe("private deployment configuration", () => {
     expect(dockerfile).toContain("EXPOSE 3000");
     expect(dockerfile).toContain("ARG BUILD_NODE_OPTIONS");
     expect(dockerfile).toContain("npm prune --omit=dev");
+    expect(dockerfile).toContain("scripts/ensure-production-secrets.mjs");
     expect(dockerfile).toContain("scripts/validate-production-env.mjs");
     expect(dockerfile).toContain("scripts/start-production.mjs");
     expect(dockerfile).toContain('CMD ["node", "scripts/start-production.mjs"]');

@@ -9,5 +9,6 @@ playwright-report
 test-results
 storage/uploads/*
 storage/backups/*
+storage/secrets/*
 *.sqlite
 *.db

@@ -18,11 +18,13 @@ x-travel-planner-environment: &travel-planner-environment
   INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:?Set INITIAL_ADMIN_USERNAME}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
   DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+  DOCUMENT_ENCRYPTION_KEY_FILE: /app/storage/secrets/document-encryption-key
 
 x-travel-planner-volumes: &travel-planner-volumes
   - sqlite-data:/app/prisma/data
   - uploads-data:/app/storage/uploads
   - backups-data:/app/storage/backups
+  - secrets-data:/app/storage/secrets
 
 services:
   travel-planner:
@@ -62,3 +64,4 @@ volumes:
   sqlite-data:
   uploads-data:
   backups-data:
+  secrets-data:
