@@ -38,14 +38,15 @@ ARG ALPINE_REPOSITORY_MIRROR=""
 RUN if [ -n "$ALPINE_REPOSITORY_MIRROR" ]; then sed -i "s|https://dl-cdn.alpinelinux.org/alpine|$ALPINE_REPOSITORY_MIRROR|g" /etc/apk/repositories; fi \
   && apk add --no-cache openssl \
   && addgroup -S nodejs \
-  && adduser -S nextjs -G nodejs
+  && adduser -S nextjs -G nodejs \
+  && mkdir -p /app/node_modules/.bin /app/prisma/data /app/storage/uploads /app/storage/backups \
+  && chown -R nextjs:nodejs /app/prisma/data /app/storage
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
@@ -54,10 +55,12 @@ COPY --from=builder /app/scripts/ensure-sqlite-db.mjs ./scripts/ensure-sqlite-db
 COPY --from=builder /app/scripts/seed-admin.mjs ./scripts/seed-admin.mjs
 COPY --from=builder /app/scripts/start-production.mjs ./scripts/start-production.mjs
 COPY --from=builder /app/scripts/validate-production-env.mjs ./scripts/validate-production-env.mjs
+COPY --from=prod-deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=prod-deps /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=prod-deps /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=prod-deps /app/node_modules/dotenv ./node_modules/dotenv
+COPY --from=prod-deps /app/node_modules/prisma ./node_modules/prisma
 COPY package.json package-lock.json ./
-
-RUN mkdir -p /app/prisma/data /app/storage/uploads /app/storage/backups \
-  && chown -R nextjs:nodejs /app
 
 USER nextjs
 

@@ -55,6 +55,14 @@ docker compose up -d --no-build
 docker compose ps
 ```
 
+说明：预构建镜像更新不是 Git 源码增量，`docker compose pull` 会比较远端镜像 digest，并按 Docker 镜像层下载变化内容。当前镜像已优化为 Next standalone + Prisma 必需依赖，避免复制完整生产 `node_modules` 和生成大 `chown` 层；优化后的第一次更新可能仍会拉较多层，后续小改动通常只需要拉较小的应用层。
+
+如果只是重启当前版本，不想访问 GHCR：
+
+```bash
+docker compose up -d --no-build --pull never
+```
+
 本地构建更新可使用：
 
 ```bash

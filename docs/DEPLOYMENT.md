@@ -90,6 +90,14 @@ docker compose up -d --no-build
 docker compose ps
 ```
 
+`docker compose pull` 会按镜像层增量下载，不会主动复用 Git 的源码增量。若 GHCR 上的 `main` 镜像确实更新了，服务器仍需下载变化的镜像层；旧版镜像曾包含完整生产 `node_modules` 和一次递归 `chown` 大层，代码小改也容易触发较大的层下载。当前 Dockerfile 已改为只带 Next standalone 和 Prisma 运行/迁移必需依赖，并移除大 `chown` 层。首次拉取优化后的镜像仍可能下载一次较多内容，之后常规更新会明显更小。
+
+如果只是重启当前已拉取镜像，不检查远端新版本，可执行：
+
+```bash
+docker compose up -d --no-build --pull never
+```
+
 服务器本地构建部署：
 
 ```bash
