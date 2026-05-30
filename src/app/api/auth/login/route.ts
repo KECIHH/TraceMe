@@ -1,19 +1,24 @@
 import { NextResponse } from "next/server";
 
+import { writeAuditLog } from "@/lib/audit";
 import { verifyPassword } from "@/lib/auth/password";
-import { checkLoginRateLimit } from "@/lib/auth/rate-limit";
+import {
+  checkLoginRateLimit,
+  clearLoginRateLimit,
+  recordFailedLoginAttempt,
+} from "@/lib/auth/rate-limit";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
+import { getClientIp } from "@/lib/request-context";
 
 const MAX_USERNAME_LENGTH = 80;
 const MAX_PASSWORD_LENGTH = 256;
 
-function getClientKey(request: Request, username: string) {
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0];
-  const clientIp =
-    forwardedFor?.trim() || request.headers.get("x-real-ip") || "unknown";
+function getRateLimitKeys(request: Request, username: string) {
+  const clientIp = getClientIp(request);
+  const normalizedUsername = username.toLowerCase();
 
-  return `${clientIp}:${username.toLowerCase()}`;
+  return [`ip:${clientIp}`, `username:${normalizedUsername}`];
 }
 
 export async function POST(request: Request) {
@@ -41,11 +46,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const rateLimit = shouldApplyLoginRateLimit()
-    ? checkLoginRateLimit(getClientKey(request, username))
-    : { allowed: true, resetAt: Date.now() };
+  const rateLimitKeys = getRateLimitKeys(request, username);
+  const rateLimitEnabled = shouldApplyLoginRateLimit(request);
+  const blockedRateLimit = rateLimitEnabled
+    ? rateLimitKeys
+        .map((key) => checkLoginRateLimit(key))
+        .find((result) => !result.allowed)
+    : null;
 
-  if (!rateLimit.allowed) {
+  if (blockedRateLimit) {
+    await writeAuditLog({
+      action: "login.failure",
+      metadata: { reason: "rate_limited", username },
+      request,
+    });
     return NextResponse.json(
       { error: "登录尝试过于频繁，请稍后再试。" },
       { status: 429 },
@@ -55,14 +69,41 @@ export async function POST(request: Request) {
   const user = await prisma.user.findUnique({ where: { username } });
 
   if (!user || !verifyPassword(password, user.passwordHash)) {
+    if (rateLimitEnabled) {
+      for (const key of rateLimitKeys) {
+        recordFailedLoginAttempt(key);
+      }
+    }
+    await writeAuditLog({
+      action: "login.failure",
+      metadata: { reason: "invalid_credentials", username },
+      request,
+      userId: user?.id,
+    });
     return NextResponse.json(
       { error: "用户名或密码不正确。" },
       { status: 401 },
     );
   }
 
-  const session = await createSession(user.id);
+  if (rateLimitEnabled) {
+    for (const key of rateLimitKeys) {
+      clearLoginRateLimit(key);
+    }
+  }
+
+  const session = await createSession(user.id, {
+    ip: getClientIp(request),
+    userAgent: request.headers.get("user-agent"),
+  });
   await setSessionCookie(session.token, session.expiresAt);
+  await writeAuditLog({
+    action: "login.success",
+    entityId: user.id,
+    entityType: "User",
+    request,
+    userId: user.id,
+  });
 
   return NextResponse.json({
     user: {
@@ -74,6 +115,9 @@ export async function POST(request: Request) {
   });
 }
 
-function shouldApplyLoginRateLimit() {
-  return process.env.E2E_BYPASS_LOGIN_RATE_LIMIT !== "true";
+function shouldApplyLoginRateLimit(request: Request) {
+  return (
+    process.env.E2E_BYPASS_LOGIN_RATE_LIMIT !== "true" ||
+    request.headers.get("x-e2e-enable-rate-limit") === "true"
+  );
 }

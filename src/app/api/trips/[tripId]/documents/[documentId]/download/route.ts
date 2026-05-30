@@ -3,7 +3,9 @@ import { readFile, stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { writeAuditLog } from "@/lib/audit";
 import { checkDocumentDownloadRateLimit } from "@/lib/document-download-rate-limit";
+import { decryptDocumentBuffer } from "@/lib/document-encryption";
 import { resolveUploadPath } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 
@@ -52,8 +54,38 @@ export async function GET(_request: Request, { params }: DownloadRouteContext) {
     return NextResponse.json({ error: "文件缺失，无法下载。" }, { status: 404 });
   }
 
-  const fileBuffer = await readFile(uploadPath);
+  const storedBuffer = await readFile(uploadPath);
+  let fileBuffer: Buffer;
+
+  try {
+    fileBuffer = document.isEncrypted
+      ? decryptDocumentBuffer(storedBuffer, {
+          encryptionAlgorithm: document.encryptionAlgorithm,
+          encryptionAuthTag: document.encryptionAuthTag,
+          encryptionIv: document.encryptionIv,
+        })
+      : storedBuffer;
+  } catch {
+    return NextResponse.json(
+      { error: "文件解密失败，请检查服务端加密密钥配置。" },
+      { status: 500 },
+    );
+  }
   const fileName = document.originalFileName || document.title || "download";
+
+  await writeAuditLog({
+    action: "document.downloaded",
+    entityId: document.id,
+    entityType: "Document",
+    metadata: {
+      encrypted: document.isEncrypted,
+      fileSha256: document.fileSha256,
+      sensitive: document.isSensitive,
+      tripId,
+    },
+    request: _request,
+    userId: user.id,
+  });
 
   return new Response(new Uint8Array(fileBuffer), {
     headers: {

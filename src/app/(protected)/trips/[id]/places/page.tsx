@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { SubmitButton } from "@/components/submit-button";
 import { formatDisplayMoney, formatEmptyValue } from "@/lib/display-format";
+import { createNavigationUrls, hasCoordinates } from "@/lib/external/map";
 import { prisma } from "@/lib/prisma";
 import {
   formatTags,
@@ -154,6 +155,7 @@ export default async function PlacesPage({
             const updateAction = updatePlaceAction.bind(null, trip.id, place.id);
             const deleteAction = deletePlaceAction.bind(null, trip.id, place.id);
             const tags = formatTags(place.tags);
+            const navigationUrls = createNavigationUrls(place);
 
             return (
               <article
@@ -226,6 +228,27 @@ export default async function PlacesPage({
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-3 text-sm">
+                  <a className="font-medium text-[#2f6f73]" href={`/trips/${trip.id}/map`}>
+                    打开地图
+                  </a>
+                  <a
+                    className="font-medium text-[#2f6f73]"
+                    href={navigationUrls.google}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Google Maps
+                  </a>
+                  {hasCoordinates(place) ? (
+                    <a
+                      className="font-medium text-[#2f6f73]"
+                      href={navigationUrls.apple}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Apple Maps
+                    </a>
+                  ) : null}
                   {place.website ? (
                     <a className="font-medium text-[#2f6f73]" href={place.website}>
                       官网

@@ -3,6 +3,8 @@ import path from "node:path";
 
 import type { DocumentType } from "@prisma/client";
 
+import { isCompressibleImageMimeType } from "@/lib/images";
+
 export const DOCUMENT_TYPE_OPTIONS: Array<{ value: DocumentType; label: string }> = [
   { value: "FLIGHT_TICKET", label: "机票" },
   { value: "TRAIN_TICKET", label: "火车票" },
@@ -30,6 +32,7 @@ export const ALLOWED_DOCUMENT_EXTENSIONS = [
   ".pdf",
   ".jpg",
   ".jpeg",
+  ".avif",
   ".png",
   ".webp",
   ".txt",
@@ -62,6 +65,7 @@ const MIME_TYPES_BY_EXTENSION: Record<string, readonly string[]> = {
   ],
   ".jpeg": ["image/jpeg"],
   ".jpg": ["image/jpeg"],
+  ".avif": ["image/avif"],
   ".markdown": ["text/markdown", "text/plain"],
   ".md": ["text/markdown", "text/plain"],
   ".pdf": ["application/pdf"],
@@ -232,6 +236,13 @@ export function validateDocumentFileContent(
       : "WEBP 文件内容与扩展名不匹配。";
   }
 
+  if (normalizedExtension === ".avif") {
+    return startsWithSignature(bytes.subarray(4), [0x66, 0x74, 0x79, 0x70]) &&
+      (hasByteSequence(bytes, "avif", 8) || hasByteSequence(bytes, "avis", 8))
+      ? null
+      : "AVIF 文件内容与扩展名不匹配。";
+  }
+
   if (normalizedExtension === ".docx") {
     return isZipLike(bytes) && hasByteSequence(bytes, "word/")
       ? null
@@ -253,6 +264,36 @@ export function validateDocumentFileContent(
   }
 
   return "文件内容类型不被允许。";
+}
+
+export function isImageDocumentFile(mimeType: string | null | undefined): boolean {
+  return isCompressibleImageMimeType(mimeType);
+}
+
+export function validateThumbnailFile({
+  fileName,
+  mimeType,
+  size,
+}: FileValidationInput): FileValidationResult {
+  const extension = getFileExtension(fileName);
+
+  if (![".avif", ".jpg", ".jpeg", ".png", ".webp"].includes(extension)) {
+    return { ok: false, error: "缩略图格式不受支持。" };
+  }
+
+  if (!isAllowedMimeTypeForExtension(mimeType, extension)) {
+    return { ok: false, error: "缩略图 MIME type 与扩展名不匹配。" };
+  }
+
+  if (!Number.isInteger(size) || size <= 0) {
+    return { ok: false, error: "缩略图不能为空。" };
+  }
+
+  if (size > 2 * 1024 * 1024) {
+    return { ok: false, error: "缩略图不能超过 2 MB。" };
+  }
+
+  return { ok: true, extension };
 }
 
 export function generateSafeStoredFileName(extension: string): string {
@@ -350,7 +391,7 @@ function isUtf8Text(bytes: Uint8Array): boolean {
 }
 
 export function getAllowedDocumentFileDescription(): string {
-  return "PDF、JPG、PNG、WEBP、TXT、Markdown、DOCX、XLSX";
+  return "PDF、JPG、PNG、WEBP、AVIF、TXT、Markdown、DOCX、XLSX";
 }
 
 export function getDocumentAcceptAttribute(): string {

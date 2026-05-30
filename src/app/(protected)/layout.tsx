@@ -1,5 +1,6 @@
 import { logoutAction } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/session";
+import { PwaManager } from "@/components/pwa-manager";
 
 import { AppNav } from "./app-nav";
 
@@ -18,6 +19,7 @@ export default async function ProtectedLayout({
           userLabel={user.displayName ?? user.username}
         />
       </header>
+      <PwaManager />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         {children}

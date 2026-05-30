@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
+import { logError } from "@/lib/logging";
+import { hashIp, truncateUserAgent } from "@/lib/request-context";
 
 export const SESSION_COOKIE_NAME = "traceme_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -28,12 +30,15 @@ export function canAccessProtectedRoute(user: AuthUser | null): user is AuthUser
   return Boolean(user);
 }
 
-export async function createSession(userId: string) {
+export async function createSession(
+  userId: string,
+  metadata: { ip?: string | null; userAgent?: string | null } = {},
+) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
 
   await cleanupExpiredSessions().catch((error: unknown) => {
-    console.error("Failed to clean up expired sessions.", error);
+    logError("session_cleanup_failed", { error });
   });
 
   await prisma.session.create({
@@ -41,6 +46,8 @@ export async function createSession(userId: string) {
       userId,
       sessionTokenHash: hashSessionToken(token),
       expiresAt,
+      ipHash: hashIp(metadata.ip),
+      userAgent: truncateUserAgent(metadata.userAgent),
     },
   });
 

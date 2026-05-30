@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { writeAuditLog } from "@/lib/audit";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   buildOtherSessionsWhere,
@@ -14,8 +15,15 @@ import { validatePasswordChangeFields } from "@/lib/settings/password";
 import { setAiEnabledByUserSetting } from "@/server/services/ai/settings";
 
 export async function setAiEnabledAction(formData: FormData) {
-  await requireUser();
-  await setAiEnabledByUserSetting(formData.get("enabled") === "true");
+  const user = await requireUser();
+  const enabled = formData.get("enabled") === "true";
+  await setAiEnabledByUserSetting(enabled);
+  await writeAuditLog({
+    action: "ai_config.updated",
+    entityType: "AppSetting",
+    metadata: { enabled },
+    userId: user.id,
+  });
   revalidatePath("/settings");
   revalidatePath("/settings/ai");
 }
@@ -84,6 +92,13 @@ export async function changePasswordAction(formData: FormData) {
       where: buildOtherSessionsWhere(persistedUser.id, currentSessionTokenHash),
     }),
   ]);
+  await writeAuditLog({
+    action: "password.changed",
+    entityId: persistedUser.id,
+    entityType: "User",
+    metadata: { otherSessionsRevoked: true },
+    userId: user.id,
+  });
 
   revalidatePath("/settings");
   revalidatePath("/settings/password");

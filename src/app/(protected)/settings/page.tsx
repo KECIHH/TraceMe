@@ -28,7 +28,7 @@ const quickLinks = [
   },
   {
     description: "查看登录与敏感配置保护说明。",
-    href: "/settings/password",
+    href: "/settings/sessions",
     label: "安全信息",
   },
   {

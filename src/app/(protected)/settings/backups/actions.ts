@@ -3,13 +3,25 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { writeAuditLog } from "@/lib/audit";
 import { createSystemBackup } from "@/lib/backup";
 import { requireUser } from "@/lib/auth/session";
 
 export async function createBackupAction(formData: FormData) {
-  await requireUser();
+  const user = await requireUser();
   const notes = String(formData.get("notes") ?? "");
   const result = await createSystemBackup(notes);
+  await writeAuditLog({
+    action: "backup.created",
+    entityId: result.record.id,
+    entityType: "BackupRecord",
+    metadata: {
+      fileName: result.record.fileName,
+      ok: result.ok,
+      sha256: result.record.sha256,
+    },
+    userId: user.id,
+  });
 
   revalidatePath("/settings/backups");
 

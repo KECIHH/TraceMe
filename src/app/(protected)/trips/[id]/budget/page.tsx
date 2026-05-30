@@ -14,6 +14,13 @@ import {
   formatMoney,
   normalizeExpenseCategory,
 } from "@/lib/budget";
+import {
+  dedupeLatestRatesByPair,
+  formatRateMeta,
+  isExchangeRateExpired,
+  normalizeCurrencyCode,
+} from "@/lib/external/exchange";
+import { getExchangeRateProviderHealth } from "@/lib/external/providers";
 import { prisma } from "@/lib/prisma";
 import { toDateInputValue } from "@/lib/trip-management";
 
@@ -24,6 +31,10 @@ import {
   updateExpenseAction,
 } from "../actions";
 import { ConfirmSubmitButton } from "../confirm-submit-button";
+import {
+  refreshExchangeRatesAction,
+  saveManualExchangeRateAction,
+} from "../external-actions";
 import { Notice, TripModuleNav } from "../module-nav";
 
 type BudgetPageProps = {
@@ -52,6 +63,10 @@ export default async function BudgetPage({
       expenses: {
         include: { relatedPlace: true },
         orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+      },
+      currencyRates: {
+        orderBy: [{ fetchedAt: "desc" }],
+        take: 50,
       },
       places: {
         orderBy: { name: "asc" },
@@ -97,6 +112,17 @@ export default async function BudgetPage({
     .slice(0, 5);
   const createExpense = createExpenseAction.bind(null, trip.id);
   const updateBudget = updateBudgetAction.bind(null, trip.id);
+  const refreshRates = refreshExchangeRatesAction.bind(null, trip.id);
+  const saveManualRate = saveManualExchangeRateAction.bind(null, trip.id);
+  const rateProvider = getExchangeRateProviderHealth();
+  const latestCurrencyRates = dedupeLatestRatesByPair(trip.currencyRates).slice(0, 12);
+  const foreignCurrencies = Array.from(
+    new Set(
+      trip.expenses
+        .map((expense) => normalizeCurrencyCode(expense.currency))
+        .filter((currency) => currency !== baseCurrency),
+    ),
+  );
 
   return (
     <section className="space-y-6">
@@ -144,6 +170,89 @@ export default async function BudgetPage({
           。这些金额未计入剩余预算和使用比例；汇率仅为记录用途，请以实际支付为准。
         </p>
       ) : null}
+
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">汇率</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5d6972]">
+              {rateProvider.message} 汇率仅作为记录用途，请以实际支付为准。
+            </p>
+          </div>
+          <form action={refreshRates}>
+            <SubmitButton
+              className={secondaryButtonClassName}
+              data-testid="refresh-exchange-rates"
+              pendingLabel="更新中..."
+            >
+              自动更新汇率
+            </SubmitButton>
+          </form>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {latestCurrencyRates.length === 0 ? (
+            <p className="rounded-md border border-dashed border-[#b8c8c4] p-4 text-sm text-[#5d6972]">
+              暂无汇率缓存。可自动更新，或手动填写汇率。
+            </p>
+          ) : (
+            latestCurrencyRates.map((rate) => (
+              <div
+                className="rounded-md border border-[#e0d9cc] bg-[#fbfaf7] p-3 text-sm"
+                data-testid="currency-rate-card"
+                key={rate.id}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-[#34434c]">
+                    1 {rate.baseCurrency} = {Number(rate.rate).toFixed(4)} {rate.targetCurrency}
+                  </span>
+                  <span className="rounded-full bg-[#edf4f1] px-2 py-1 text-xs font-medium text-[#2f6f73]">
+                    {isExchangeRateExpired(rate.fetchedAt) ? "可能过期" : "缓存可用"}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-[#7a858c]">
+                  {formatRateMeta(rate)}
+                </p>
+              </div>
+            ))
+          )}
+        </div>
+        <form action={saveManualRate} className="mt-4 grid gap-4 md:grid-cols-4">
+          <Field label="原币种">
+            <input
+              className={inputClassName}
+              defaultValue={foreignCurrencies[0] ?? ""}
+              maxLength={3}
+              name="baseCurrency"
+              placeholder="USD"
+            />
+          </Field>
+          <Field label="目标币种">
+            <input
+              className={inputClassName}
+              defaultValue={baseCurrency}
+              maxLength={3}
+              name="targetCurrency"
+            />
+          </Field>
+          <Field label="汇率">
+            <input
+              className={inputClassName}
+              inputMode="decimal"
+              name="manualRate"
+              placeholder="7.2000"
+              type="text"
+            />
+          </Field>
+          <Field label="有效日期">
+            <input className={inputClassName} name="validDate" type="date" />
+          </Field>
+          <div className="md:col-span-4">
+            <SubmitButton className={primaryButtonClassName}>
+              保存手动汇率
+            </SubmitButton>
+          </div>
+        </form>
+      </section>
 
       <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
@@ -549,6 +658,9 @@ const inputClassName =
 
 const primaryButtonClassName =
   "rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62]";
+
+const secondaryButtonClassName =
+  "rounded-md border border-[#2f6f73] px-4 py-2 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f1]";
 
 const dangerButtonClassName =
   "rounded-md border border-[#d46a55] px-3 py-2 text-sm font-semibold text-[#9b2f1f] transition hover:bg-[#fff2ee]";

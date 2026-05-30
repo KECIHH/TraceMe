@@ -250,6 +250,57 @@ export async function moveItineraryItemAction(
   redirect(`${itineraryPath(tripId)}#item-${itemId}`);
 }
 
+export async function reorderItineraryItemsAction(
+  tripId: string,
+  dayId: string,
+  formData: FormData,
+) {
+  await requireTrip(tripId);
+  await requireDay(tripId, dayId);
+  const orderedIds = formValue(formData, "orderedItemIds")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  if (orderedIds.length === 0) {
+    redirect(`${itineraryPath(tripId)}#day-${dayId}`);
+  }
+
+  const existingItems = await prisma.itineraryItem.findMany({
+    select: { id: true },
+    where: { dayId, tripId },
+  });
+  const existingIds = new Set(existingItems.map((item) => item.id));
+  const isValidOrder =
+    orderedIds.length === existingItems.length &&
+    orderedIds.every((id) => existingIds.has(id)) &&
+    new Set(orderedIds).size === orderedIds.length;
+
+  if (!isValidOrder) {
+    redirectWithMessage(
+      `${itineraryPath(tripId)}#day-${dayId}`,
+      "error",
+      "拖拽排序数据无效，请刷新后重试。",
+    );
+  }
+
+  await prisma.$transaction(
+    orderedIds.map((id, index) =>
+      prisma.itineraryItem.update({
+        where: { id, tripId },
+        data: { sortOrder: (index + 1) * 1000 },
+      }),
+    ),
+  );
+
+  revalidateTripItinerary(tripId);
+  redirectWithMessage(
+    `${itineraryPath(tripId)}#day-${dayId}`,
+    "message",
+    "拖拽排序已保存。",
+  );
+}
+
 export async function sortItineraryDayByStartTimeAction(
   tripId: string,
   dayId: string,

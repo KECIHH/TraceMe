@@ -90,7 +90,10 @@ describe("backup helpers", () => {
       schemaVersion: 1,
     });
     expect(manifest.excluded).toContain(".env");
-    expect(manifest.files).toEqual([{ path: "database/dev.db", size: 1024 }]);
+    expect(manifest.files).toEqual([
+      { path: "database/dev.db", sha256: "", size: 1024 },
+    ]);
+    expect(manifest.schema.database).toBe("sqlite");
     expect(manifest.privacyWarning).toContain("AI");
   });
 

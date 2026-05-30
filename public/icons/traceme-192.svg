@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="TraceMe">
+  <rect width="192" height="192" rx="42" fill="#2f6f73"/>
+  <circle cx="96" cy="78" r="34" fill="#f6f4ef"/>
+  <path d="M96 34c-31 0-56 25-56 56 0 43 56 78 56 78s56-35 56-78c0-31-25-56-56-56Zm0 78a22 22 0 1 1 0-44 22 22 0 0 1 0 44Z" fill="#ffffff"/>
+  <path d="M58 148c16 10 60 10 76 0" fill="none" stroke="#f0d39b" stroke-width="10" stroke-linecap="round"/>
+</svg>

@@ -15,6 +15,7 @@ import {
 
 import {
   createChecklistItemAction,
+  bulkUpdateChecklistStatusAction,
   deleteChecklistItemAction,
   generateChecklistTemplateAction,
   updateChecklistItemAction,
@@ -60,6 +61,7 @@ export default async function ChecklistPage({
     : trip.checklistItems;
   const completion = calculateChecklistCompletion(allItems);
   const createAction = createChecklistItemAction.bind(null, trip.id);
+  const bulkStatusAction = bulkUpdateChecklistStatusAction.bind(null, trip.id);
   const generateAction = generateChecklistTemplateAction.bind(null, trip.id);
   const groupedItems = CHECKLIST_CATEGORIES.map((category) => ({
     category,
@@ -123,6 +125,30 @@ export default async function ChecklistPage({
       <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold">新增清单项</h2>
         <ChecklistForm action={createAction} submitLabel="新增清单项" />
+      </section>
+
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold">批量操作</h2>
+        <form action={bulkStatusAction} className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <select className={inputClassName} defaultValue={selectedCategory} name="category">
+            <option value="">全部分类</option>
+            {CHECKLIST_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+          <select className={inputClassName} defaultValue="DONE" name="status">
+            {CHECKLIST_STATUS_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+          <SubmitButton className={secondaryButtonClassName} pendingLabel="批量更新中...">
+            批量更新清单
+          </SubmitButton>
+        </form>
       </section>
 
       <section className="space-y-4">

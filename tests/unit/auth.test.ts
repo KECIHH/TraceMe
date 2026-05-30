@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   checkLoginRateLimit,
+  recordFailedLoginAttempt,
   clearLoginRateLimitForTests,
 } from "@/lib/auth/rate-limit";
 import {
@@ -138,10 +139,11 @@ describe("login rate limit", () => {
     clearLoginRateLimitForTests();
 
     for (let index = 0; index < 5; index += 1) {
-      expect(checkLoginRateLimit("127.0.0.1:admin", 1000).allowed).toBe(true);
+      expect(checkLoginRateLimit("ip:127.0.0.1", 1000).allowed).toBe(true);
+      recordFailedLoginAttempt("ip:127.0.0.1", 1000);
     }
 
-    expect(checkLoginRateLimit("127.0.0.1:admin", 1000).allowed).toBe(false);
-    expect(checkLoginRateLimit("127.0.0.1:admin", 61_001).allowed).toBe(true);
+    expect(checkLoginRateLimit("ip:127.0.0.1", 1000).allowed).toBe(false);
+    expect(checkLoginRateLimit("ip:127.0.0.1", 601_001).allowed).toBe(true);
   });
 });

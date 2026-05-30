@@ -17,6 +17,7 @@ describe("document file safety", () => {
   it("validates allowed file extensions", () => {
     expect(isAllowedDocumentExtension(".pdf")).toBe(true);
     expect(isAllowedDocumentExtension(".jpg")).toBe(true);
+    expect(isAllowedDocumentExtension(".avif")).toBe(true);
     expect(isAllowedDocumentExtension(".md")).toBe(true);
     expect(isAllowedDocumentExtension(".docx")).toBe(true);
     expect(isAllowedDocumentExtension(".exe")).toBe(false);
@@ -27,6 +28,7 @@ describe("document file safety", () => {
   it("validates MIME type against extension", () => {
     expect(isAllowedMimeTypeForExtension("application/pdf", ".pdf")).toBe(true);
     expect(isAllowedMimeTypeForExtension("image/png", ".png")).toBe(true);
+    expect(isAllowedMimeTypeForExtension("image/avif", ".avif")).toBe(true);
     expect(isAllowedMimeTypeForExtension("text/plain", ".md")).toBe(true);
     expect(isAllowedMimeTypeForExtension("application/javascript", ".txt")).toBe(
       false,
@@ -48,6 +50,15 @@ describe("document file safety", () => {
     ).toBe("PDF 文件内容与扩展名不匹配。");
     expect(
       validateDocumentFileContent(new TextEncoder().encode("hello"), ".txt"),
+    ).toBeNull();
+    expect(
+      validateDocumentFileContent(
+        new Uint8Array([
+          0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69,
+          0x66,
+        ]),
+        ".avif",
+      ),
     ).toBeNull();
     expect(validateDocumentFileContent(new Uint8Array([0xff]), ".txt")).toBe(
       "文本文件内容不是有效的 UTF-8 文本。",

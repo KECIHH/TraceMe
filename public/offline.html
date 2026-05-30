@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2f6f73" />
+    <title>离线模式 - TraceMe 迹遇</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Arial, "Microsoft YaHei", "PingFang SC", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f4ef;
+        color: #172026;
+      }
+
+      main {
+        box-sizing: border-box;
+        margin: 0 auto;
+        max-width: 760px;
+        padding: 40px 16px;
+      }
+
+      section,
+      .hero {
+        border: 1px solid #d8d2c6;
+        border-radius: 8px;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgb(23 32 38 / 0.08);
+        padding: 20px;
+      }
+
+      section {
+        margin-top: 16px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 8px;
+        font-size: 30px;
+        line-height: 1.2;
+      }
+
+      h2 {
+        font-size: 20px;
+      }
+
+      .eyebrow {
+        color: #2f6f73;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .muted,
+      li {
+        color: #5d6972;
+        font-size: 14px;
+        line-height: 1.65;
+      }
+
+      .muted {
+        margin-top: 8px;
+      }
+
+      ul {
+        display: grid;
+        gap: 8px;
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 0;
+      }
+
+      li {
+        border-radius: 6px;
+        background: #fbfaf7;
+        padding: 10px 12px;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #101417;
+          color: #edf4f1;
+        }
+
+        section,
+        .hero {
+          border-color: #34434c;
+          background: #172026;
+          box-shadow: none;
+        }
+
+        .muted,
+        li {
+          color: #d9e5e1;
+        }
+
+        li {
+          background: #101417;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app">
+      <div class="hero">
+        <p class="eyebrow">离线模式</p>
+        <h1>暂无可用离线旅行摘要</h1>
+        <p class="muted">
+          回到有网络的环境后，进入具体旅行并点击“刷新离线缓存”，即可在弱网或离线时查看今日行程、住宿、清单和地点摘要。
+        </p>
+      </div>
+    </main>
+    <script>
+      (function () {
+        var prefix = "traceme.offline.trip.";
+        var lastTripId = localStorage.getItem("traceme.offline.lastTripId");
+        var key = lastTripId ? prefix + lastTripId : null;
+        var fallbackKey = Object.keys(localStorage).find(function (item) {
+          return item.indexOf(prefix) === 0;
+        });
+        var raw = localStorage.getItem(key || fallbackKey || "");
+
+        if (!raw) {
+          return;
+        }
+
+        var summary;
+
+        try {
+          summary = JSON.parse(raw);
+        } catch (_error) {
+          return;
+        }
+
+        function text(value) {
+          return value || "暂无";
+        }
+
+        function list(title, items) {
+          var safeItems = items && items.length ? items : ["暂无缓存摘要"];
+          return (
+            "<section><h2>" +
+            title +
+            "</h2><ul>" +
+            safeItems
+              .map(function (item) {
+                return "<li>" + escapeHtml(item) + "</li>";
+              })
+              .join("") +
+            "</ul></section>"
+          );
+        }
+
+        function escapeHtml(value) {
+          return String(value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
+
+        var todayItems = (summary.today.items || []).map(function (item) {
+          return [
+            text(item.startTime) + " - " + text(item.endTime),
+            item.title,
+            item.placeName,
+            item.transportToNext,
+          ]
+            .filter(Boolean)
+            .join(" / ");
+        });
+        var lodging = (summary.lodging || []).map(function (item) {
+          return [item.name, item.address, item.phone].filter(Boolean).join(" / ");
+        });
+        var checklist = (summary.checklist || []).map(function (item) {
+          return [item.category, item.title, item.status].filter(Boolean).join(" / ");
+        });
+        var places = (summary.places || []).map(function (item) {
+          return [item.name, item.address, item.phone].filter(Boolean).join(" / ");
+        });
+
+        document.getElementById("app").innerHTML =
+          '<div class="hero"><p class="eyebrow">离线模式</p><h1>' +
+          escapeHtml(summary.title) +
+          '</h1><p class="muted">' +
+          escapeHtml(text(summary.dateRange.startDate)) +
+          " 至 " +
+          escapeHtml(text(summary.dateRange.endDate)) +
+          "，缓存版本 " +
+          escapeHtml(summary.cacheVersion) +
+          "</p></div>" +
+          list("今日行程", todayItems) +
+          list("住宿摘要", lodging) +
+          list("准备清单", checklist) +
+          list("地点与紧急备注", places.concat(summary.emergencyNotes || []));
+      })();
+    </script>
+  </body>
+</html>

@@ -107,14 +107,24 @@ docker compose exec -T travel-planner npx prisma migrate deploy
 
 推荐在应用设置页创建系统备份。备份保存在 `storage/backups` volume 中。
 
-命令行层面可先导出 Docker volume 或使用应用内备份后下载备份 zip。备份文件可能包含敏感旅行资料，请加密保存。
+也可以使用 CLI：
+
+```powershell
+npm.cmd run backup:create -- --notes "before upgrade"
+npm.cmd run backup:list
+npm.cmd run backup:verify -- --file travel-planner-backup-YYYYMMDD-HHmmss.zip
+npm.cmd run backup:prune -- --dry-run
+npm.cmd run backup:prune
+```
+
+备份文件可能包含敏感旅行资料，请加密保存。完整校验、恢复和保留策略见 [STAGE15_SECURITY_RELIABILITY.md](STAGE15_SECURITY_RELIABILITY.md)。
 
 ## 恢复备份注意事项
 
 1. 停止应用：`docker compose stop travel-planner`。
-2. 备份当前数据库和 uploads volume，避免误覆盖。
-3. 将备份中的 SQLite 快照恢复到数据库 volume。
-4. 将备份中的 uploads 合并或恢复到 uploads volume。
+2. 运行 `npm.cmd run backup:verify -- --file <backup.zip>`。
+3. 运行 `npm.cmd run backup:restore -- --file <backup.zip> --confirm-restore`，脚本会先创建当前状态安全备份。
+4. 如 CLI 恢复不适合当前部署，再将备份中的 SQLite 快照和 uploads 手动恢复到对应 volume。
 5. 不要用旧备份覆盖当前 `.env`。
 6. 启动应用：`docker compose up -d`。
 7. 检查 `/api/health`。

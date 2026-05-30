@@ -623,6 +623,39 @@ export async function updateChecklistStatusAction(
   redirect(redirectPath);
 }
 
+export async function bulkUpdateChecklistStatusAction(
+  tripId: string,
+  formData: FormData,
+) {
+  await requireTrip(tripId);
+  const redirectPath = modulePath(tripId, "checklist");
+  const status = formValue(formData, "status");
+  const category = formValue(formData, "category");
+
+  if (!isChecklistStatus(status)) {
+    redirectWithMessage(redirectPath, "error", "批量清单状态无效。");
+  }
+
+  if (category && !CHECKLIST_CATEGORIES.includes(category)) {
+    redirectWithMessage(redirectPath, "error", "批量清单分类无效。");
+  }
+
+  const result = await prisma.checklistItem.updateMany({
+    data: { status },
+    where: {
+      tripId,
+      ...(category ? { category } : {}),
+    },
+  });
+
+  revalidateTrip(tripId);
+  redirectWithMessage(
+    redirectPath,
+    "message",
+    `已批量更新 ${result.count} 个清单项。`,
+  );
+}
+
 export async function deleteChecklistItemAction(tripId: string, itemId: string) {
   await requireTrip(tripId);
   const redirectPath = modulePath(tripId, "checklist");

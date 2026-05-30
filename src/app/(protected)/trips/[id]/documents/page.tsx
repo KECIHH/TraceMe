@@ -1,8 +1,10 @@
 import { access } from "node:fs/promises";
 
 import type { Document, DocumentType, Prisma } from "@prisma/client";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
+import { ImageUploadEnhancer } from "@/components/image-upload-enhancer";
 import { SubmitButton } from "@/components/submit-button";
 import {
   formatDisplayDate,
@@ -189,6 +191,7 @@ function DocumentCard({
   const updateAction = updateDocumentAction.bind(null, tripId, document.id);
   const deleteAction = deleteDocumentAction.bind(null, tripId, document.id);
   const downloadHref = `/api/trips/${tripId}/documents/${document.id}/download`;
+  const thumbnailHref = `/api/trips/${tripId}/documents/${document.id}/thumbnail`;
 
   return (
     <article
@@ -224,12 +227,32 @@ function DocumentCard({
             <Info label="上传时间" value={formatDateTime(document.createdAt)} />
             <Info label="MIME type" value={formatEmptyValue(document.mimeType)} />
             <Info label="存储状态" value={document.fileMissing ? "文件缺失" : "正常"} />
+            <Info
+              label="缩略图"
+              value={document.thumbnailPath ? "已生成缩略图" : "未生成"}
+            />
+            <Info
+              label="图片压缩"
+              value={document.imageWasCompressed ? "已压缩" : "未压缩"}
+            />
           </dl>
 
           {document.notes ? (
             <p className="whitespace-pre-wrap rounded-md bg-[#fbfaf7] p-3 text-sm leading-6 text-[#34434c]">
               {document.notes}
             </p>
+          ) : null}
+
+          {document.thumbnailPath && !document.isSensitive ? (
+            <Image
+              alt={`${document.title} 缩略图`}
+              className="mt-3 aspect-video max-h-48 w-full rounded-md border border-[#e0d9cc] object-cover sm:max-w-sm"
+              loading="lazy"
+              height={270}
+              src={thumbnailHref}
+              unoptimized
+              width={480}
+            />
           ) : null}
         </div>
 
@@ -328,12 +351,9 @@ function DocumentForm({
         </Field>
         {includeFile ? (
           <Field label="上传文件" required>
-            <input
+            <ImageUploadEnhancer
               accept={getDocumentAcceptAttribute()}
               className={inputClassName}
-              name="file"
-              required
-              type="file"
             />
           </Field>
         ) : null}

@@ -6,6 +6,7 @@ import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
+import { writeAuditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth/session";
 import { resolveUploadPath } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
@@ -108,7 +109,7 @@ export async function archiveTripAction(tripId: string) {
 }
 
 export async function deleteTripAction(tripId: string) {
-  await requireUser();
+  const user = await requireUser();
   const documents = await prisma.document.findMany({
     select: { filePath: true },
     where: { tripId },
@@ -127,6 +128,13 @@ export async function deleteTripAction(tripId: string) {
   }
 
   await removeTripDocumentFiles(documents.map((document) => document.filePath));
+  await writeAuditLog({
+    action: "trip.deleted",
+    entityId: tripId,
+    entityType: "Trip",
+    metadata: { documentCount: documents.length },
+    userId: user.id,
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/trips");

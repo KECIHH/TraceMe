@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="TraceMe">
+  <rect width="512" height="512" rx="112" fill="#2f6f73"/>
+  <circle cx="256" cy="208" r="88" fill="#f6f4ef"/>
+  <path d="M256 88c-83 0-150 67-150 150 0 116 150 210 150 210s150-94 150-210c0-83-67-150-150-150Zm0 210a60 60 0 1 1 0-120 60 60 0 0 1 0 120Z" fill="#ffffff"/>
+  <path d="M154 394c43 27 161 27 204 0" fill="none" stroke="#f0d39b" stroke-width="28" stroke-linecap="round"/>
+</svg>

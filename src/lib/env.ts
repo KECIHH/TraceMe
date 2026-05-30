@@ -40,10 +40,27 @@ export function validateProductionEnvironment(
   }
 
   requireValue(errors, env, "INITIAL_ADMIN_USERNAME");
+  validateDocumentEncryptionKey(errors, env);
 
   validateInitialAdminPassword(errors, env, options.requireInitialAdminPassword);
 
   return { ok: errors.length === 0, errors };
+}
+
+function validateDocumentEncryptionKey(errors: string[], env: AppEnvironment) {
+  const key = env.DOCUMENT_ENCRYPTION_KEY?.trim();
+
+  if (!key) {
+    errors.push("DOCUMENT_ENCRYPTION_KEY is required to prevent uploaded files from being stored in plaintext.");
+    return;
+  }
+
+  const isHexKey = /^[a-f0-9]{64}$/i.test(key);
+  const isLongPassphrase = key.length >= 32;
+
+  if (!isHexKey && !isLongPassphrase) {
+    errors.push("DOCUMENT_ENCRYPTION_KEY must be 64 hex characters, 32 raw bytes encoded as base64/base64url, or at least 32 UTF-8 characters.");
+  }
 }
 
 function requireValue(

@@ -12,6 +12,7 @@ import {
   formatDisplayTime,
   formatEmptyValue,
 } from "@/lib/display-format";
+import { formatWeatherSnapshot, toDateKey } from "@/lib/external/weather";
 import {
   analyzeItineraryDay,
   formatDateTitle,
@@ -27,6 +28,7 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { Notice, TripModuleNav } from "../module-nav";
+import { refreshWeatherAction } from "../external-actions";
 import { updateItineraryItemStatusAction } from "../itinerary/actions";
 
 type TodayPageProps = {
@@ -68,6 +70,9 @@ export default async function TodayPage({
         select: { id: true, name: true, address: true, type: true },
         where: { type: "HOTEL" },
       },
+      weatherSnapshots: {
+        orderBy: { fetchedAt: "desc" },
+      },
     },
     where: { id },
   });
@@ -91,6 +96,12 @@ export default async function TodayPage({
     : null;
   const lodgingItems =
     fullDisplayDay?.items.filter((item) => item.type === "LODGING") ?? [];
+  const weatherSnapshot = fullDisplayDay
+    ? trip.weatherSnapshots.find(
+        (snapshot) => toDateKey(snapshot.date) === toDateKey(fullDisplayDay.date),
+      ) ?? null
+    : null;
+  const refreshWeather = refreshWeatherAction.bind(null, trip.id);
 
   return (
     <section className="mx-auto max-w-3xl space-y-5">
@@ -138,8 +149,31 @@ export default async function TodayPage({
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
               <TodayInfo label="今日城市" value={fullDisplayDay.city} />
               <TodayInfo label="主题" value={fullDisplayDay.theme} />
-              <TodayInfo label="天气" value={fullDisplayDay.weatherSummary} />
+              <TodayInfo
+                label="天气"
+                value={
+                  weatherSnapshot
+                    ? formatWeatherSnapshot(weatherSnapshot)
+                    : fullDisplayDay.weatherSummary
+                }
+              />
             </dl>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-[#7a858c]">
+                外部数据仅供参考，请人工核验。
+              </p>
+              <form action={refreshWeather}>
+                <input name="returnTo" type="hidden" value={`/trips/${trip.id}/today`} />
+                <input name="forceRefresh" type="hidden" value="true" />
+                <SubmitButton
+                  className={secondaryButtonClassName}
+                  data-testid="today-refresh-weather"
+                  pendingLabel="刷新中..."
+                >
+                  手动刷新天气
+                </SubmitButton>
+              </form>
+            </div>
             {alerts.length > 0 ? (
               <p className="mt-3 rounded-md border border-[#f0d39b] bg-[#fff9e8] px-3 py-2 text-sm text-[#73530f]">
                 今天有 {alerts.length} 条提醒，请留意节奏。

@@ -7,11 +7,15 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
+import { writeAuditLog } from "@/lib/audit";
+import { encryptDocumentBuffer, getDocumentEncryptionStatus } from "@/lib/document-encryption";
 import {
   generateSafeStoredFileName,
+  isImageDocumentFile,
   isDocumentType,
   normalizeOriginalFileName,
   resolveUploadPath,
+  validateThumbnailFile,
   validateDocumentFile,
   validateDocumentFileContent,
   validateTripDocumentStorageUsage,
@@ -21,6 +25,7 @@ import { prisma } from "@/lib/prisma";
 import { emptyToNull, parseDateInput } from "@/lib/trip-management";
 
 export async function uploadDocumentAction(tripId: string, formData: FormData) {
+  const user = await requireUser();
   await requireTrip(tripId);
   const redirectPath = documentsPath(tripId);
   const upload = formData.get("file");
@@ -47,6 +52,32 @@ export async function uploadDocumentAction(tripId: string, formData: FormData) {
   }
 
   const uploadBuffer = Buffer.from(await upload.arrayBuffer());
+  const thumbnailUpload = getThumbnailUpload(formData);
+  const thumbnailValidation =
+    thumbnailUpload && isImageDocumentFile(upload.type)
+      ? validateThumbnailFile({
+          fileName: normalizeOriginalFileName(thumbnailUpload.name),
+          mimeType: thumbnailUpload.type,
+          size: thumbnailUpload.size,
+        })
+      : null;
+
+  if (thumbnailValidation && !thumbnailValidation.ok) {
+    redirectWithMessage(redirectPath, "error", thumbnailValidation.error);
+  }
+
+  const encryptionStatus = getDocumentEncryptionStatus();
+
+  if (!encryptionStatus.ready) {
+    redirectWithMessage(
+      redirectPath,
+      "error",
+      process.env.NODE_ENV === "production"
+        ? "生产环境未配置 DOCUMENT_ENCRYPTION_KEY，已禁止上传文件以避免敏感资料明文落盘。"
+        : "未配置有效的 DOCUMENT_ENCRYPTION_KEY，无法加密保存上传文件。",
+    );
+  }
+
   const contentValidationError = validateDocumentFileContent(
     uploadBuffer,
     validation.extension,
@@ -56,13 +87,24 @@ export async function uploadDocumentAction(tripId: string, formData: FormData) {
     redirectWithMessage(redirectPath, "error", contentValidationError);
   }
 
+  if (thumbnailUpload && thumbnailValidation?.ok) {
+    const thumbnailValidationError = validateDocumentFileContent(
+      new Uint8Array(await thumbnailUpload.arrayBuffer()),
+      thumbnailValidation.extension,
+    );
+
+    if (thumbnailValidationError) {
+      redirectWithMessage(redirectPath, "error", thumbnailValidationError);
+    }
+  }
+
   const storedSize = await prisma.document.aggregate({
     _sum: { fileSize: true },
     where: { tripId },
   });
   const storageValidationError = validateTripDocumentStorageUsage(
     storedSize._sum.fileSize ?? 0,
-    upload.size,
+    upload.size + (thumbnailValidation?.ok ? thumbnailUpload?.size ?? 0 : 0),
   );
 
   if (storageValidationError) {
@@ -71,12 +113,27 @@ export async function uploadDocumentAction(tripId: string, formData: FormData) {
 
   const storedFileName = generateSafeStoredFileName(validation.extension);
   const uploadPath = resolveUploadPath(storedFileName);
+  const encryptedDocument = encryptDocumentBuffer(uploadBuffer);
+  const encryptedThumbnail =
+    thumbnailUpload && thumbnailValidation?.ok
+      ? encryptDocumentBuffer(Buffer.from(await thumbnailUpload.arrayBuffer()))
+      : null;
+  const thumbnailFileName =
+    thumbnailValidation?.ok && encryptedThumbnail
+      ? generateSafeStoredFileName(thumbnailValidation.extension)
+      : null;
+  const thumbnailPath = thumbnailFileName
+    ? resolveUploadPath(thumbnailFileName)
+    : null;
 
   await mkdir(UPLOAD_STORAGE_DIR, { recursive: true });
-  await writeFile(uploadPath, uploadBuffer);
+  await writeFile(uploadPath, encryptedDocument.ciphertext);
+  if (thumbnailPath && encryptedThumbnail) {
+    await writeFile(thumbnailPath, encryptedThumbnail.ciphertext);
+  }
 
   try {
-    await prisma.document.create({
+    const document = await prisma.document.create({
       data: {
         tripId,
         title,
@@ -85,13 +142,48 @@ export async function uploadDocumentAction(tripId: string, formData: FormData) {
         originalFileName,
         mimeType: upload.type,
         fileSize: upload.size,
+        encryptedFileSize: encryptedDocument.encryptedFileSize,
+        encryptionAlgorithm: encryptedDocument.encryptionAlgorithm,
+        encryptionAuthTag: encryptedDocument.encryptionAuthTag,
+        encryptionIv: encryptedDocument.encryptionIv,
+        encryptionVersion: encryptedDocument.encryptionVersion,
+        fileSha256: encryptedDocument.fileSha256,
+        isEncrypted: true,
+        imageWasCompressed: formData.get("imageWasCompressed") === "true",
         isSensitive: formData.get("isSensitive") === "on",
         relatedDate: parseDateInput(formValue(formData, "relatedDate")),
+        thumbnailFileSize: encryptedThumbnail ? thumbnailUpload?.size ?? null : null,
+        thumbnailEncryptedFileSize: encryptedThumbnail?.encryptedFileSize ?? null,
+        thumbnailEncryptionAlgorithm:
+          encryptedThumbnail?.encryptionAlgorithm ?? null,
+        thumbnailEncryptionAuthTag: encryptedThumbnail?.encryptionAuthTag ?? null,
+        thumbnailEncryptionIv: encryptedThumbnail?.encryptionIv ?? null,
+        thumbnailEncryptionVersion:
+          encryptedThumbnail?.encryptionVersion ?? null,
+        thumbnailMimeType: encryptedThumbnail ? thumbnailUpload?.type ?? null : null,
+        thumbnailPath: thumbnailFileName,
+        thumbnailSha256: encryptedThumbnail?.fileSha256 ?? null,
         notes: optionalText(formData, "notes"),
       },
     });
+    await writeAuditLog({
+      action: "document.uploaded",
+      entityId: document.id,
+      entityType: "Document",
+      metadata: {
+        encrypted: true,
+        fileSha256: encryptedDocument.fileSha256,
+        originalFileName,
+        size: upload.size,
+        tripId,
+      },
+      userId: user.id,
+    });
   } catch (error) {
     await unlink(uploadPath).catch(() => {});
+    if (thumbnailPath) {
+      await unlink(thumbnailPath).catch(() => {});
+    }
     throw error;
   }
 
@@ -132,6 +224,7 @@ export async function updateDocumentAction(
 }
 
 export async function deleteDocumentAction(tripId: string, documentId: string) {
+  const user = await requireUser();
   await requireTrip(tripId);
   const redirectPath = documentsPath(tripId);
   const document = await prisma.document.findFirst({
@@ -143,8 +236,18 @@ export async function deleteDocumentAction(tripId: string, documentId: string) {
   }
 
   const uploadPath = safeResolveDocumentPath(document.filePath);
+  const thumbnailPath = document.thumbnailPath
+    ? safeResolveDocumentPath(document.thumbnailPath)
+    : null;
 
   await prisma.document.delete({ where: { id: document.id } });
+  await writeAuditLog({
+    action: "document.deleted",
+    entityId: document.id,
+    entityType: "Document",
+    metadata: { fileSha256: document.fileSha256, tripId },
+    userId: user.id,
+  });
 
   if (uploadPath) {
     try {
@@ -159,6 +262,10 @@ export async function deleteDocumentAction(tripId: string, documentId: string) {
         );
       }
     }
+  }
+
+  if (thumbnailPath) {
+    await unlink(thumbnailPath).catch(() => {});
   }
 
   revalidateDocuments(tripId);
@@ -180,6 +287,16 @@ function parseDocumentType(formData: FormData) {
   const type = formValue(formData, "type");
 
   return isDocumentType(type) ? type : "OTHER";
+}
+
+function getThumbnailUpload(formData: FormData): File | null {
+  const upload = formData.get("thumbnail");
+
+  if (!(upload instanceof File) || upload.size <= 0) {
+    return null;
+  }
+
+  return upload;
 }
 
 function requiredText(formData: FormData, key: string): string {

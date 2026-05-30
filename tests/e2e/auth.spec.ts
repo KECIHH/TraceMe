@@ -35,3 +35,32 @@ test("seed user can login, visit dashboard, and logout", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
 });
+
+test("login failures are rate limited without revealing account existence", async ({
+  page,
+}) => {
+  const attemptedUsername = `missing-${Date.now()}`;
+  const headers = {
+    "x-e2e-enable-rate-limit": "true",
+    "x-forwarded-for": `203.0.113.${Date.now() % 200}`,
+  };
+
+  for (let index = 0; index < 5; index += 1) {
+    const response = await page.request.post("/api/auth/login", {
+      data: { password: "wrong-password", username: attemptedUsername },
+      headers,
+    });
+    const body = await response.json();
+
+    expect(response.status()).toBe(401);
+    expect(body.error).toBe("用户名或密码不正确。");
+  }
+
+  const blocked = await page.request.post("/api/auth/login", {
+    data: { password: "wrong-password", username: attemptedUsername },
+    headers,
+  });
+
+  expect(blocked.status()).toBe(429);
+  expect((await blocked.json()).error).toBe("登录尝试过于频繁，请稍后再试。");
+});

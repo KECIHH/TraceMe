@@ -9,7 +9,16 @@ import type {
 import { notFound } from "next/navigation";
 
 import { SubmitButton } from "@/components/submit-button";
+import { ItineraryDragSort } from "@/components/itinerary-drag-sort";
 import { formatDisplayMoney, formatEmptyValue } from "@/lib/display-format";
+import {
+  buildPolylinePoints,
+  createNavigationUrls,
+  hasCoordinates,
+  PLACE_TYPE_MARKER_STYLES,
+  projectPlacesToMap,
+} from "@/lib/external/map";
+import { formatWeatherSnapshot, toDateKey } from "@/lib/external/weather";
 import {
   analyzeItineraryDay,
   BOOKING_STATUS_OPTIONS,
@@ -29,12 +38,14 @@ import {
 import { prisma } from "@/lib/prisma";
 
 import { ConfirmSubmitButton } from "../confirm-submit-button";
+import { refreshWeatherAction, saveManualWeatherAction } from "../external-actions";
 import { Notice, TripModuleNav } from "../module-nav";
 import {
   createItineraryItemAction,
   deleteItineraryItemAction,
   generateItineraryDaysAction,
   moveItineraryItemAction,
+  reorderItineraryItemsAction,
   sortItineraryDayByStartTimeAction,
   syncItineraryDaysAction,
   updateItineraryDayAction,
@@ -62,7 +73,10 @@ type ItineraryItemWithPlace = {
   notes: string | null;
   sortOrder: number;
   placeId: string | null;
-  place: Pick<Place, "id" | "name" | "type"> | null;
+  place: Pick<
+    Place,
+    "address" | "id" | "latitude" | "longitude" | "name" | "type"
+  > | null;
 };
 
 export default async function ItineraryPage({
@@ -77,7 +91,16 @@ export default async function ItineraryPage({
         include: {
           items: {
             include: {
-              place: { select: { id: true, name: true, type: true } },
+              place: {
+                select: {
+                  address: true,
+                  id: true,
+                  latitude: true,
+                  longitude: true,
+                  name: true,
+                  type: true,
+                },
+              },
             },
             orderBy: [
               { sortOrder: "asc" },
@@ -89,6 +112,7 @@ export default async function ItineraryPage({
         orderBy: { date: "asc" },
       },
       places: { orderBy: [{ type: "asc" }, { name: "asc" }] },
+      weatherSnapshots: { orderBy: { fetchedAt: "desc" } },
     },
     where: { id },
   });
@@ -99,6 +123,8 @@ export default async function ItineraryPage({
 
   const generateAction = generateItineraryDaysAction.bind(null, trip.id);
   const syncAction = syncItineraryDaysAction.bind(null, trip.id);
+  const refreshWeather = refreshWeatherAction.bind(null, trip.id);
+  const saveManualWeather = saveManualWeatherAction.bind(null, trip.id);
   const baseCurrency = trip.baseCurrency || "CNY";
   const rangeStart = trip.startDate ? startOfLocalDay(trip.startDate) : null;
   const rangeEnd = trip.endDate ? startOfLocalDay(trip.endDate) : null;
@@ -124,6 +150,17 @@ export default async function ItineraryPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <form action={refreshWeather}>
+            <input name="returnTo" type="hidden" value={`/trips/${trip.id}/itinerary`} />
+            <input name="forceRefresh" type="hidden" value="true" />
+            <SubmitButton
+              className={secondaryButtonClassName}
+              data-testid="refresh-weather"
+              pendingLabel="刷新中..."
+            >
+              刷新天气
+            </SubmitButton>
+          </form>
           <form action={generateAction}>
             <SubmitButton
               className={primaryButtonClassName}
@@ -189,11 +226,32 @@ export default async function ItineraryPage({
               trip.id,
               day.id,
             );
+            const dragSortAction = reorderItineraryItemsAction.bind(
+              null,
+              trip.id,
+              day.id,
+            );
             const updateDayAction = updateItineraryDayAction.bind(
               null,
               trip.id,
               day.id,
             );
+            const latestWeather = trip.weatherSnapshots.find(
+              (snapshot) => toDateKey(snapshot.date) === toDateKey(day.date),
+            );
+            const routePlaces = items
+              .map((item) => item.place)
+              .filter((place): place is NonNullable<typeof place> => Boolean(place))
+              .filter(hasCoordinates)
+              .map((place) => ({
+                address: place.address,
+                id: place.id,
+                latitude: place.latitude,
+                longitude: place.longitude,
+                name: place.name,
+                type: place.type,
+              }));
+            const projectedRoutePlaces = projectPlacesToMap(routePlaces);
             const isOutOfRange =
               rangeStart &&
               rangeEnd &&
@@ -227,6 +285,14 @@ export default async function ItineraryPage({
                         .filter(Boolean)
                         .join(" · ") || "城市、主题和天气待补充"}
                     </p>
+                    {latestWeather ? (
+                      <p
+                        className="mt-2 rounded-md border border-[#b8d8ca] bg-[#f0faf5] px-3 py-2 text-sm text-[#276044]"
+                        data-testid="weather-snapshot"
+                      >
+                        天气快照：{formatWeatherSnapshot(latestWeather)}。外部数据仅供参考，请人工核验。
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4 xl:min-w-[520px]">
@@ -297,6 +363,44 @@ export default async function ItineraryPage({
                   </form>
                 </details>
 
+                <details className="mt-4 rounded-md border border-[#e0d9cc] bg-[#fbfaf7] p-4">
+                  <summary className="cursor-pointer text-sm font-semibold text-[#2f6f73]">
+                    手动天气备注
+                  </summary>
+                  <form action={saveManualWeather} className="mt-4 grid gap-4 md:grid-cols-3">
+                    <Field label="日期">
+                      <input
+                        className={inputClassName}
+                        defaultValue={formatDateInputValue(day.date)}
+                        name="date"
+                        type="date"
+                      />
+                    </Field>
+                    <Field label="地点">
+                      <input
+                        className={inputClassName}
+                        defaultValue={day.city ?? trip.mainDestination ?? ""}
+                        name="locationName"
+                      />
+                    </Field>
+                    <Field label="备注">
+                      <input
+                        className={inputClassName}
+                        defaultValue={day.weatherSummary ?? ""}
+                        name="manualNote"
+                        placeholder="例如：阵雨，备伞"
+                      />
+                    </Field>
+                    <div className="md:col-span-3">
+                      <SubmitButton className={primaryButtonClassName}>
+                        保存天气备注
+                      </SubmitButton>
+                    </div>
+                  </form>
+                </details>
+
+                <DayRouteMap places={projectedRoutePlaces} />
+
                 <div className="mt-5 flex flex-wrap gap-3">
                   <form action={sortAction}>
                     <SubmitButton className={secondaryButtonClassName} pendingLabel="排序中...">
@@ -305,23 +409,25 @@ export default async function ItineraryPage({
                   </form>
                 </div>
 
-                <div className="mt-5 space-y-3">
+                <div className="mt-5">
                   {items.length === 0 ? (
                     <p className="rounded-md bg-[#fbfaf7] p-4 text-sm text-[#5d6972]">
                       这一天还没有行程项。
                     </p>
                   ) : (
-                    items.map((item, index) => (
-                      <ItineraryItemCard
-                        baseCurrency={baseCurrency}
-                        canMoveDown={index < items.length - 1}
-                        canMoveUp={index > 0}
-                        item={item}
-                        key={item.id}
-                        places={trip.places}
-                        tripId={trip.id}
-                      />
-                    ))
+                    <ItineraryDragSort action={dragSortAction}>
+                      {items.map((item, index) => (
+                        <ItineraryItemCard
+                          baseCurrency={baseCurrency}
+                          canMoveDown={index < items.length - 1}
+                          canMoveUp={index > 0}
+                          item={item}
+                          key={item.id}
+                          places={trip.places}
+                          tripId={trip.id}
+                        />
+                      ))}
+                    </ItineraryDragSort>
                   )}
                 </div>
 
@@ -386,7 +492,9 @@ function ItineraryItemCard({
   return (
     <article
       className="rounded-md border border-[#e0d9cc] bg-white p-4"
+      data-itinerary-item-id={item.id}
       data-testid="itinerary-item-card"
+      draggable
       id={`item-${item.id}`}
     >
       <div className="grid gap-3 lg:grid-cols-[150px_1fr_auto] lg:items-start">
@@ -395,7 +503,7 @@ function ItineraryItemCard({
             {formatTimeRange(item.startTime, item.endTime)}
           </p>
           <p className="mt-1 text-xs text-[#7a858c]">
-            排序 {item.sortOrder}
+            排序 {item.sortOrder} · 可拖拽
           </p>
         </div>
         <div>
@@ -646,6 +754,76 @@ function ItineraryItemForm({
         </SubmitButton>
       </div>
     </form>
+  );
+}
+
+function DayRouteMap({
+  places,
+}: {
+  places: Array<{
+    address?: string | null;
+    id: string;
+    latitude: number;
+    longitude: number;
+    name: string;
+    type: Place["type"];
+    x: number;
+    y: number;
+  }>;
+}) {
+  if (places.length === 0) {
+    return (
+      <p className="mt-5 rounded-md border border-dashed border-[#b8c8c4] bg-[#fbfaf7] p-4 text-sm text-[#5d6972]">
+        当天还没有带坐标的地点，补充地点经纬度后会显示直线连接顺序。
+      </p>
+    );
+  }
+
+  return (
+    <div
+      className="relative mt-5 h-72 overflow-hidden rounded-md border border-[#cfd7d2] bg-[#eef4f1]"
+      data-testid="itinerary-route-map"
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(47,111,115,0.12)_1px,transparent_1px),linear-gradient(rgba(47,111,115,0.12)_1px,transparent_1px)] bg-[size:42px_42px]" />
+      {places.length > 1 ? (
+        <svg
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full"
+          preserveAspectRatio="none"
+          viewBox="0 0 100 100"
+        >
+          <polyline
+            fill="none"
+            points={buildPolylinePoints(places)}
+            stroke="#2f6f73"
+            strokeDasharray="3 2"
+            strokeLinecap="round"
+            strokeWidth="1.5"
+          />
+        </svg>
+      ) : null}
+      {places.map((place, index) => {
+        const style = PLACE_TYPE_MARKER_STYLES[place.type];
+        const navigationUrls = createNavigationUrls(place);
+
+        return (
+          <a
+            className={[
+              "absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white px-2.5 py-1 text-xs font-bold text-white shadow-md",
+              style.className,
+            ].join(" ")}
+            href={navigationUrls.google}
+            key={`${place.id}-${index}`}
+            rel="noreferrer"
+            style={{ left: `${place.x}%`, top: `${place.y}%` }}
+            target="_blank"
+            title={place.name}
+          >
+            {index + 1}
+          </a>
+        );
+      })}
+    </div>
   );
 }
 

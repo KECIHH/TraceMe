@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { expect, test } from "@playwright/test";
+import { verifyBackupFile } from "@/lib/backup";
 
 const username = process.env.INITIAL_ADMIN_USERNAME ?? "admin";
 const password = process.env.INITIAL_ADMIN_PASSWORD ?? "change-me-before-use";
@@ -103,6 +104,8 @@ test("user can export a trip and manage system backups", async ({ page }) => {
     /^travel-planner-backup-\d{8}-\d{6}\.zip$/,
   );
   const backupPath = await backupDownload.path();
+  const verification = await verifyBackupFile(backupPath!);
+  expect(verification.ok).toBe(true);
   const backupBytes = readFileSync(backupPath!);
   expect(backupBytes.includes(Buffer.from(".env"))).toBe(false);
   expect(backupBytes.includes(Buffer.from("manifest.json"))).toBe(true);

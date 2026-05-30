@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { writeAuditLog } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/session";
 import { deleteBackupRecord } from "@/lib/backup/delete";
 
@@ -16,6 +17,14 @@ export async function POST(request: Request, { params }: BackupDeleteRouteProps)
 
   const { backupId } = await params;
   const result = await deleteBackupRecord(backupId);
+  await writeAuditLog({
+    action: "backup.deleted",
+    entityId: backupId,
+    entityType: "BackupRecord",
+    metadata: { ok: result.ok },
+    request,
+    userId: user.id,
+  });
   const redirectUrl = new URL("/settings/backups", request.url);
   const errorReason = result.ok ? null : result.reason;
   const errorMessage =

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { writeAuditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth/session";
 import {
   generateTripExportFileName,
@@ -15,7 +16,7 @@ type TripExportRouteProps = {
 };
 
 export async function GET(request: Request, { params }: TripExportRouteProps) {
-  await requireUser();
+  const user = await requireUser();
   const { tripId } = await params;
   const url = new URL(request.url);
   const format = url.searchParams.get("format") ?? "json";
@@ -27,6 +28,15 @@ export async function GET(request: Request, { params }: TripExportRouteProps) {
   if (!trip) {
     return NextResponse.json({ error: "Trip not found." }, { status: 404 });
   }
+
+  await writeAuditLog({
+    action: "trip.exported",
+    entityId: trip.id,
+    entityType: "Trip",
+    metadata: { format },
+    request,
+    userId: user.id,
+  });
 
   if (format === "markdown" || format === "md") {
     return fileResponse(generateTripMarkdownExport(trip), {

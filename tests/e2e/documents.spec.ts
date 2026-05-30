@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
+import path from "node:path";
+
+import { prisma } from "@/lib/prisma";
 
 const username = process.env.INITIAL_ADMIN_USERNAME ?? "admin";
 const password = process.env.INITIAL_ADMIN_PASSWORD ?? "change-me-before-use";
@@ -71,6 +76,16 @@ test("user can upload, edit, download, and delete trip documents", async ({
   await documentCard.locator('textarea[name="notes"]').fill(updatedNote);
   await documentCard.getByRole("button", { name: "保存文件信息" }).click();
   await expect(documentCard).toContainText(updatedNote);
+
+  const persistedDocument = await prisma.document.findFirstOrThrow({
+    where: { title: documentTitle },
+  });
+  expect(persistedDocument.isEncrypted).toBe(true);
+  expect(
+    readFileSync(findStoredUploadPath(persistedDocument.filePath)).includes(
+      Buffer.from("%PDF-1.4"),
+    ),
+  ).toBe(false);
 
   page.once("dialog", async (dialog) => {
     expect(dialog.message()).toContain("隐私信息");
@@ -168,3 +183,17 @@ test("upload storage is not exposed through public URLs", async ({ page }) => {
 
   expect(response.status()).toBe(404);
 });
+
+function findStoredUploadPath(fileName: string): string {
+  const candidates = [
+    path.join(process.cwd(), "storage", "uploads", fileName),
+    path.join(process.cwd(), ".next", "standalone", "storage", "uploads", fileName),
+  ];
+  const found = candidates.find((candidate) => existsSync(candidate));
+
+  if (!found) {
+    throw new Error(`Stored upload file not found: ${fileName}`);
+  }
+
+  return found;
+}

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { ThemeToggle } from "@/components/theme-provider";
+
 const navItems = [
   { href: "/dashboard", label: "首页" },
   { href: "/trips", label: "旅行计划" },
@@ -69,6 +71,7 @@ export function AppNav({
               pathname={pathname}
             />
           ))}
+          <ThemeToggle />
           <form action={logout}>
             <button
               className="inline-flex min-h-11 items-center rounded-md border border-[#cfd7d2] px-3 py-2 text-sm font-medium text-[#34434c] transition hover:border-[#2f6f73] hover:text-[#2f6f73]"
@@ -94,6 +97,7 @@ export function AppNav({
               pathname={pathname}
             />
           ))}
+          <ThemeToggle />
           <form action={logout}>
             <button
               className="inline-flex min-h-11 w-full items-center rounded-md border border-[#cfd7d2] px-3 py-2 text-sm font-medium text-[#34434c] transition hover:border-[#2f6f73] hover:text-[#2f6f73]"

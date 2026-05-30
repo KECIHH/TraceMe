@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SubmitButton } from "@/components/submit-button";
 import { formatEmptyValue } from "@/lib/display-format";
+import { formatWeatherSnapshot } from "@/lib/external/weather";
 import { prisma } from "@/lib/prisma";
 import {
   formatBudget,
@@ -18,13 +20,20 @@ import {
   deleteTripAction,
 } from "../actions";
 import { ArchiveTripForm, DeleteTripForm } from "../trip-danger-actions";
+import { refreshWeatherAction } from "./external-actions";
+import { Notice } from "./module-nav";
 
 type TripDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ error?: string; message?: string }>;
 };
 
-export default async function TripDetailPage({ params }: TripDetailPageProps) {
+export default async function TripDetailPage({
+  params,
+  searchParams,
+}: TripDetailPageProps) {
   const { id } = await params;
+  const queryParams = (await searchParams) ?? {};
   const trip = await prisma.trip.findUnique({
     include: {
       _count: {
@@ -41,6 +50,10 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
         },
       },
       places: { select: { type: true } },
+      weatherSnapshots: {
+        orderBy: { fetchedAt: "desc" },
+        take: 1,
+      },
     },
     where: { id },
   });
@@ -54,9 +67,12 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
   const stayCount = trip.places.filter((place) => place.type === "HOTEL").length;
   const archiveAction = archiveTripAction.bind(null, trip.id);
   const deleteAction = deleteTripAction.bind(null, trip.id);
+  const refreshWeather = refreshWeatherAction.bind(null, trip.id);
+  const latestWeather = trip.weatherSnapshots[0] ?? null;
 
   return (
     <section className="space-y-6">
+      <Notice error={queryParams.error} message={queryParams.message} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link className="text-sm font-medium text-[#2f6f73]" href="/trips">
@@ -128,6 +144,32 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
       </div>
 
       <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">天气摘要</h2>
+            <p className="mt-2 text-sm leading-6 text-[#5d6972]">
+              {latestWeather
+                ? `${latestWeather.locationName}：${formatWeatherSnapshot(latestWeather)}`
+                : "暂无天气缓存。可刷新天气，或在每日安排中手动填写天气备注。"}
+            </p>
+            <p className="mt-2 text-xs text-[#7a858c]">
+              外部数据仅供参考，请人工核验。
+            </p>
+          </div>
+          <form action={refreshWeather}>
+            <input name="returnTo" type="hidden" value={`/trips/${trip.id}`} />
+            <input name="forceRefresh" type="hidden" value="true" />
+            <SubmitButton
+              className="rounded-md border border-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f1]"
+              pendingLabel="刷新中..."
+            >
+              手动刷新天气
+            </SubmitButton>
+          </form>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold">旅行资料模块</h2>
@@ -146,6 +188,11 @@ export default async function TripDetailPage({ params }: TripDetailPageProps) {
             count={trip._count.places}
             href={`/trips/${trip.id}/places`}
             label="地点库"
+          />
+          <ModuleLink
+            count={trip._count.places}
+            href={`/trips/${trip.id}/map`}
+            label="地图"
           />
           <ModuleLink
             count={foodCount}

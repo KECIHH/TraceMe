@@ -6,6 +6,7 @@ const validEnv = {
   DATABASE_URL: "file:/app/prisma/data/traceme.db",
   APP_BASE_URL: "https://travel.example.com",
   SESSION_SECRET: "a-random-session-secret-with-more-than-32-chars",
+  DOCUMENT_ENCRYPTION_KEY: "document-encryption-secret-with-more-than-32-chars",
   INITIAL_ADMIN_USERNAME: "admin",
   NODE_ENV: "production",
 };

@@ -150,6 +150,7 @@ model User {
   displayName  String?
   role         UserRole  @default(ADMIN)
   sessions     Session[]
+  auditLogs    AuditLog[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -159,6 +160,8 @@ model Session {
   userId           String
   sessionTokenHash String   @unique
   expiresAt        DateTime
+  ipHash           String?
+  userAgent        String?
   createdAt        DateTime @default(now())
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -191,6 +194,8 @@ model Trip {
   notes           Note[]
   aiConversations AiConversation[]
   aiPlanDrafts    AiPlanDraft[]
+  weatherSnapshots WeatherSnapshot[]
+  currencyRates    CurrencyRate[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 }
@@ -209,6 +214,7 @@ model Destination {
   notes         String?
   trip          Trip      @relation(fields: [tripId], references: [id], onDelete: Cascade)
   places        Place[]
+  weatherSnapshots WeatherSnapshot[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -431,6 +437,49 @@ model Expense {
   @@index([relatedPlaceId])
 }
 
+model WeatherSnapshot {
+  id                       String       @id @default(cuid())
+  tripId                   String
+  destinationId            String?
+  locationName             String
+  latitude                 Float?
+  longitude                Float?
+  date                     DateTime
+  temperatureMin           Float?
+  temperatureMax           Float?
+  condition                String?
+  precipitationProbability Int?
+  wind                     String?
+  source                   String
+  fetchedAt                DateTime     @default(now())
+  rawJson                  Json?
+  manualNote               String?
+  trip                     Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  destination              Destination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+
+  @@index([tripId])
+  @@index([destinationId])
+  @@index([tripId, date])
+  @@index([source, fetchedAt])
+}
+
+model CurrencyRate {
+  id             String   @id @default(cuid())
+  tripId         String?
+  baseCurrency   String
+  targetCurrency String
+  rate           Decimal
+  source         String
+  fetchedAt      DateTime @default(now())
+  validDate      DateTime
+  isManual       Boolean  @default(false)
+  trip           Trip?    @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@index([baseCurrency, targetCurrency, validDate])
+  @@index([source, fetchedAt])
+}
+
 model Document {
   id               String       @id @default(cuid())
   tripId           String
@@ -442,6 +491,22 @@ model Document {
   fileSize         Int?
   isSensitive      Boolean      @default(false)
   isEncrypted      Boolean      @default(false)
+  encryptionAlgorithm String?
+  encryptionIv        String?
+  encryptionAuthTag   String?
+  encryptedFileSize   Int?
+  fileSha256          String?
+  encryptionVersion   Int?
+  thumbnailPath        String?
+  thumbnailMimeType    String?
+  thumbnailFileSize    Int?
+  thumbnailEncryptionAlgorithm String?
+  thumbnailEncryptionIv        String?
+  thumbnailEncryptionAuthTag   String?
+  thumbnailEncryptedFileSize   Int?
+  thumbnailSha256              String?
+  thumbnailEncryptionVersion   Int?
+  imageWasCompressed   Boolean      @default(false)
   relatedDate      DateTime?
   notes            String?
   trip             Trip         @relation(fields: [tripId], references: [id], onDelete: Cascade)
@@ -510,10 +575,30 @@ model BackupRecord {
   fileName  String
   filePath  String
   fileSize  Int
+  sha256    String?
   status    BackupStatus @default(success)
   notes     String?
   createdAt DateTime     @default(now())
 
   @@index([createdAt])
   @@index([status])
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  userId            String?
+  action            String
+  entityType        String?
+  entityId          String?
+  ipHash            String?
+  ipMasked          String?
+  userAgent         String?
+  metadataRedacted  Json?
+  createdAt         DateTime @default(now())
+  user              User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
 }
