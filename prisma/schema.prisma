@@ -157,6 +157,7 @@ model User {
   role         UserRole  @default(ADMIN)
   sessions     Session[]
   auditLogs    AuditLog[]
+  importJobs   ImportJob[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -201,6 +202,7 @@ model Trip {
   aiConversations AiConversation[]
   aiPlanDrafts    AiPlanDraft[]
   aiDrafts         AiDraft[]
+  importJobs       ImportJob[]
   weatherSnapshots WeatherSnapshot[]
   currencyRates    CurrencyRate[]
   createdAt       DateTime          @default(now())
@@ -626,4 +628,29 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@index([entityType, entityId])
+}
+
+model ImportJob {
+  id               String   @id @default(cuid())
+  tripId           String
+  userId           String?
+  type             String
+  fileName         String
+  fileSize         Int
+  mimeType         String?
+  status           String   @default("parsed")
+  conflictStrategy String?
+  previewJson      Json
+  validationJson   Json
+  resultJson       Json?
+  errorMessage     String?
+  trip             Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([tripId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }

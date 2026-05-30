@@ -12,6 +12,7 @@ const moduleLinks = [
   { href: "routes", label: "交通方案" },
   { href: "budget", label: "预算" },
   { href: "documents", label: "文件票据" },
+  { href: "import", label: "导入" },
   { href: "export", label: "导出" },
   { href: "ai", label: "AI 助手" },
   { href: "notes", label: "笔记" },
