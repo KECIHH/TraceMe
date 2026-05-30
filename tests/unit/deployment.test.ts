@@ -28,8 +28,8 @@ describe("private deployment configuration", () => {
     expect(compose).toContain("DATABASE_URL: file:/app/prisma/data/traceme.db");
     expect(compose).not.toContain("DATABASE_URL: ${DATABASE_URL");
     expect(compose).toContain("APP_BASE_URL: ${APP_BASE_URL:?");
-    expect(compose).toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?");
-    expect(compose).not.toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}");
+    expect(compose).toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}");
+    expect(compose).not.toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?");
     expect(compose).toContain("sqlite-data:/app/prisma/data");
     expect(compose).toContain("uploads-data:/app/storage/uploads");
     expect(compose).toContain("backups-data:/app/storage/backups");

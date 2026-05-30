@@ -19,6 +19,18 @@ describe("production environment validation", () => {
     });
   });
 
+  it("keeps document encryption required at runtime", () => {
+    const result = validateProductionEnvironment({
+      ...validEnv,
+      DOCUMENT_ENCRYPTION_KEY: "",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain(
+      "DOCUMENT_ENCRYPTION_KEY is required to prevent uploaded files from being stored in plaintext.",
+    );
+  });
+
   it("rejects missing required values and example secrets", () => {
     const result = validateProductionEnvironment({
       ...validEnv,
