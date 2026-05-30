@@ -57,7 +57,10 @@ APP_BASE_URL="https://travel.example.com"
 SESSION_SECRET="replace-with-a-long-random-secret-at-least-32-chars"
 INITIAL_ADMIN_USERNAME="admin"
 INITIAL_ADMIN_PASSWORD="replace-with-a-strong-admin-password"
+DOCUMENT_ENCRYPTION_KEY="生成后长期保存，例如 openssl rand -base64 32 的输出"
 ```
+
+`DOCUMENT_ENCRYPTION_KEY` 用于解密已上传文件，生产环境必填。首次一键部署会自动生成并写入 `.env`；手动部署请运行 `openssl rand -base64 32` 后填入。增量更新时必须保留服务器 `.env` 中的原值，不能重新生成。
 
 启动：
 

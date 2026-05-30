@@ -28,6 +28,8 @@ describe("private deployment configuration", () => {
     expect(compose).toContain("DATABASE_URL: file:/app/prisma/data/traceme.db");
     expect(compose).not.toContain("DATABASE_URL: ${DATABASE_URL");
     expect(compose).toContain("APP_BASE_URL: ${APP_BASE_URL:?");
+    expect(compose).toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?");
+    expect(compose).not.toContain("DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}");
     expect(compose).toContain("sqlite-data:/app/prisma/data");
     expect(compose).toContain("uploads-data:/app/storage/uploads");
     expect(compose).toContain("backups-data:/app/storage/backups");
@@ -82,6 +84,9 @@ describe("private deployment configuration", () => {
     expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
     expect(linuxBootstrap).toContain("Updated APP_BASE_URL in $env_file.");
     expect(linuxBootstrap).toContain("Invalid APP_BASE_URL in $INSTALL_DIR/.env");
+    expect(linuxBootstrap).toContain("ensure_document_encryption_key_ready \".env\"");
+    expect(linuxBootstrap).toContain("Generated DOCUMENT_ENCRYPTION_KEY in $env_file");
+    expect(linuxBootstrap).not.toContain('DOCUMENT_ENCRYPTION_KEY="${DOCUMENT_ENCRYPTION_KEY:-}"');
 
     expect(windowsBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
     expect(windowsBootstrap).toContain("ghcr.io/kecihh/traceme:main");
@@ -91,6 +96,11 @@ describe("private deployment configuration", () => {
     expect(windowsBootstrap).toContain('"127.0.0.1"');
     expect(windowsBootstrap).toContain("Updated APP_BASE_URL in $Path.");
     expect(windowsBootstrap).toContain("Invalid APP_BASE_URL in $InstallDir\\.env");
+    expect(windowsBootstrap).toContain('Ensure-DocumentEncryptionKeyReady -Path ".env"');
+    expect(windowsBootstrap).toContain("Generated DOCUMENT_ENCRYPTION_KEY in $Path");
+    expect(windowsBootstrap).not.toContain(
+      '$documentEncryptionKey = if ($env:DOCUMENT_ENCRYPTION_KEY) { $env:DOCUMENT_ENCRYPTION_KEY } else { "" }',
+    );
   });
 });
 

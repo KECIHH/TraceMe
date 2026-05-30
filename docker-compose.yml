@@ -17,7 +17,7 @@ x-travel-planner-environment: &travel-planner-environment
   SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET to a random value with at least 32 characters}
   INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:?Set INITIAL_ADMIN_USERNAME}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:-}
+  DOCUMENT_ENCRYPTION_KEY: ${DOCUMENT_ENCRYPTION_KEY:?Set DOCUMENT_ENCRYPTION_KEY to a stable secret with at least 32 characters. Keep it forever; changing it makes encrypted uploads unreadable.}
 
 x-travel-planner-volumes: &travel-planner-volumes
   - sqlite-data:/app/prisma/data

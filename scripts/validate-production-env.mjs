@@ -56,7 +56,7 @@ function validateDocumentEncryptionKey(errors, env) {
   const key = env.DOCUMENT_ENCRYPTION_KEY?.trim();
 
   if (!key) {
-    errors.push("DOCUMENT_ENCRYPTION_KEY is required to prevent uploaded files from being stored in plaintext.");
+    errors.push("DOCUMENT_ENCRYPTION_KEY is required to prevent uploaded files from being stored in plaintext. Generate it once with `openssl rand -base64 32`, save it in the server .env, and keep the same value across updates.");
     return;
   }
 

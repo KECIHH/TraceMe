@@ -270,10 +270,50 @@ EOF_APP_BASE_URL
   exit 1
 }
 
+is_valid_encryption_key() {
+  local value="$1"
+
+  if [ -z "$value" ]; then
+    return 1
+  fi
+
+  if printf '%s' "$value" | grep -Eq '^[A-Fa-f0-9]{64}$'; then
+    return 0
+  fi
+
+  [ "${#value}" -ge 32 ]
+}
+
+ensure_document_encryption_key_ready() {
+  local env_file="$1"
+  local saved_document_encryption_key
+  local next_document_encryption_key
+
+  if is_valid_encryption_key "${DOCUMENT_ENCRYPTION_KEY:-}"; then
+    set_env_value "DOCUMENT_ENCRYPTION_KEY" "$DOCUMENT_ENCRYPTION_KEY" "$env_file"
+    echo "Updated DOCUMENT_ENCRYPTION_KEY in $env_file from the current environment."
+    return
+  fi
+
+  saved_document_encryption_key="$(read_env_value DOCUMENT_ENCRYPTION_KEY "$env_file" || true)"
+  if is_valid_encryption_key "$saved_document_encryption_key"; then
+    return
+  fi
+
+  next_document_encryption_key="$(random_secret 32)"
+  set_env_value "DOCUMENT_ENCRYPTION_KEY" "$next_document_encryption_key" "$env_file"
+  echo "Generated DOCUMENT_ENCRYPTION_KEY in $env_file. Back it up; changing it later makes encrypted uploads unreadable."
+}
+
 write_env_file() {
   local env_file="$1"
   local session_secret="$2"
   local admin_password="$3"
+  local document_encryption_key="${DOCUMENT_ENCRYPTION_KEY:-}"
+
+  if ! is_valid_encryption_key "$document_encryption_key"; then
+    document_encryption_key="$(random_secret 32)"
+  fi
 
   cat >"$env_file" <<EOF_ENV
 DATABASE_URL="file:./dev.db"
@@ -293,7 +333,7 @@ OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 OPENAI_MODEL="${OPENAI_MODEL:-gpt-4.1-mini}"
 AI_PROVIDER="${AI_PROVIDER:-openai}"
 AI_FEATURE_ENABLED="${AI_FEATURE_ENABLED:-true}"
-DOCUMENT_ENCRYPTION_KEY="${DOCUMENT_ENCRYPTION_KEY:-}"
+DOCUMENT_ENCRYPTION_KEY="${document_encryption_key}"
 SEED_EXAMPLE_TRIP="${SEED_EXAMPLE_TRIP}"
 EOF_ENV
 }
@@ -336,6 +376,7 @@ else
 fi
 
 ensure_app_base_url_ready ".env"
+ensure_document_encryption_key_ready ".env"
 ensure_env_value "NPM_CONFIG_REGISTRY" "$NPM_CONFIG_REGISTRY" ".env"
 ensure_env_value "ALPINE_REPOSITORY_MIRROR" "$ALPINE_REPOSITORY_MIRROR" ".env"
 ensure_env_value "BUILD_NODE_OPTIONS" "$BUILD_NODE_OPTIONS" ".env"

@@ -45,6 +45,8 @@ docker compose logs --tail=100 travel-planner
 
 容器启动时会自动执行 `prisma migrate deploy`。如更新涉及管理员密码重置，再单独执行 seed。
 
+更新前确认服务器 `.env` 中保留了首次部署生成的 `DOCUMENT_ENCRYPTION_KEY`。不要在增量更新时删除或重新生成它；如果该行为空，运行一键部署脚本会自动补齐，但已有加密文件的部署必须使用原密钥。
+
 预构建镜像更新可使用：
 
 ```bash

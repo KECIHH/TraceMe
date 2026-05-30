@@ -162,6 +162,34 @@ For a local smoke test, use:
 "@
 }
 
+function Test-EncryptionKey {
+  param([string]$Value)
+
+  if (-not $Value) {
+    return $false
+  }
+
+  return ($Value -match "^[A-Fa-f0-9]{64}$") -or ($Value.Length -ge 32)
+}
+
+function Ensure-DocumentEncryptionKeyReady {
+  param([string]$Path)
+
+  if (Test-EncryptionKey -Value $env:DOCUMENT_ENCRYPTION_KEY) {
+    Set-EnvValue -Path $Path -Key "DOCUMENT_ENCRYPTION_KEY" -Value $env:DOCUMENT_ENCRYPTION_KEY
+    Write-Host "Updated DOCUMENT_ENCRYPTION_KEY in $Path from the current environment."
+    return
+  }
+
+  $savedDocumentEncryptionKey = Read-EnvValue -Path $Path -Key "DOCUMENT_ENCRYPTION_KEY"
+  if (Test-EncryptionKey -Value $savedDocumentEncryptionKey) {
+    return
+  }
+
+  Set-EnvValue -Path $Path -Key "DOCUMENT_ENCRYPTION_KEY" -Value (New-RandomSecret -ByteCount 32)
+  Write-Host "Generated DOCUMENT_ENCRYPTION_KEY in $Path. Back it up; changing it later makes encrypted uploads unreadable."
+}
+
 function Start-TraceMeContainer {
   for ($attempt = 1; $attempt -le $BuildRetries; $attempt++) {
     Write-Host "Docker build/start attempt $attempt/$BuildRetries ..."
@@ -238,7 +266,7 @@ function Write-EnvFile {
   $openAiModel = if ($env:OPENAI_MODEL) { $env:OPENAI_MODEL } else { "gpt-4.1-mini" }
   $aiProvider = if ($env:AI_PROVIDER) { $env:AI_PROVIDER } else { "openai" }
   $aiFeatureEnabled = if ($env:AI_FEATURE_ENABLED) { $env:AI_FEATURE_ENABLED } else { "true" }
-  $documentEncryptionKey = if ($env:DOCUMENT_ENCRYPTION_KEY) { $env:DOCUMENT_ENCRYPTION_KEY } else { "" }
+  $documentEncryptionKey = if (Test-EncryptionKey -Value $env:DOCUMENT_ENCRYPTION_KEY) { $env:DOCUMENT_ENCRYPTION_KEY } else { New-RandomSecret -ByteCount 32 }
 
   @"
 DATABASE_URL="file:./dev.db"
@@ -300,6 +328,7 @@ if (-not (Test-Path -LiteralPath ".env")) {
 }
 
 Ensure-AppBaseUrlReady -Path ".env"
+Ensure-DocumentEncryptionKeyReady -Path ".env"
 Ensure-EnvValue -Path ".env" -Key "NPM_CONFIG_REGISTRY" -Value $NpmConfigRegistry
 Ensure-EnvValue -Path ".env" -Key "ALPINE_REPOSITORY_MIRROR" -Value $AlpineRepositoryMirror
 Ensure-EnvValue -Path ".env" -Key "TRACEME_IMAGE" -Value $TraceMeImage

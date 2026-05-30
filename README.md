@@ -123,6 +123,8 @@ APP_BASE_URL=http://YOUR_SERVER_IP:3000 bash scripts/bootstrap-linux.sh
 ```bash
 cp .env.example .env
 # 编辑 .env，至少设置 HTTPS 域名、强 SESSION_SECRET、管理员用户名和强密码
+# 生成并长期保存文档加密密钥；后续更新不要改这个值
+openssl rand -base64 32
 docker compose build
 docker compose up -d
 docker compose run --rm seed-admin
@@ -133,6 +135,7 @@ docker compose run --rm seed-admin
 - `APP_BASE_URL` 面向域名时必须是 HTTPS URL，例如 `https://travel.example.com`；测试期可临时使用 `http://服务器IP:3000`，本地冒烟测试可使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
 - `SESSION_SECRET` 至少 32 字符，不能使用示例值。
 - `DOCUMENT_ENCRYPTION_KEY` 必须安全生成并长期保存；丢失后无法解密已上传文件。
+- 一键部署脚本会在 `.env` 缺失或该值为空时自动生成 `DOCUMENT_ENCRYPTION_KEY`；手动部署必须自己填入。增量更新时不要删除或改动服务器 `.env` 中的这个值。
 - `INITIAL_ADMIN_PASSWORD` 仅 seed 管理员时需要，生产环境不能使用默认弱密码。
 - 主应用容器不注入 `INITIAL_ADMIN_PASSWORD`，seed 管理员使用一次性 `seed-admin` 服务。
 - Docker 镜像不会打包 `.env`、`storage/uploads`、`storage/backups` 或数据库文件。
