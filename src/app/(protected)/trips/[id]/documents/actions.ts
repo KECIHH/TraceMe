@@ -8,6 +8,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
+import { requireTripAccess } from "@/lib/collaboration";
 import { encryptDocumentBuffer, getDocumentEncryptionStatus } from "@/lib/document-encryption";
 import {
   generateSafeStoredFileName,
@@ -26,6 +27,7 @@ import { emptyToNull, parseDateInput } from "@/lib/trip-management";
 
 export async function uploadDocumentAction(tripId: string, formData: FormData) {
   const user = await requireUser();
+  await requireTripAccess(tripId, "uploadDocuments");
   await requireTrip(tripId);
   const redirectPath = documentsPath(tripId);
   const upload = formData.get("file");
@@ -196,6 +198,7 @@ export async function updateDocumentAction(
   documentId: string,
   formData: FormData,
 ) {
+  await requireTripAccess(tripId, "edit");
   await requireTrip(tripId);
   const redirectPath = documentsPath(tripId);
 
@@ -225,6 +228,7 @@ export async function updateDocumentAction(
 
 export async function deleteDocumentAction(tripId: string, documentId: string) {
   const user = await requireUser();
+  await requireTripAccess(tripId, "edit");
   await requireTrip(tripId);
   const redirectPath = documentsPath(tripId);
   const document = await prisma.document.findFirst({
@@ -273,7 +277,6 @@ export async function deleteDocumentAction(tripId: string, documentId: string) {
 }
 
 async function requireTrip(tripId: string) {
-  await requireUser();
   const trip = await prisma.trip.findUnique({ where: { id: tripId } });
 
   if (!trip) {

@@ -23,6 +23,7 @@ const e2eEnv = {
   AI_CONFIG_ENCRYPTION_KEY: "test-ai-config-encryption-key-32-bytes",
   RESET_ADMIN_PASSWORD: "true",
   RESET_AI_ENABLED: "true",
+  APP_BASE_URL: e2eBaseUrl,
   HOSTNAME: "127.0.0.1",
   PORT: e2ePort,
 };

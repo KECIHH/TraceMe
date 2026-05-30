@@ -28,7 +28,7 @@ export function TripForm({
   const { values, errors } = state;
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-6" data-testid="trip-form">
       {state.message ? (
         <p className="rounded-md border border-[#f1b8aa] bg-[#fff2ee] px-4 py-3 text-sm text-[#9b2f1f]">
           {state.message}

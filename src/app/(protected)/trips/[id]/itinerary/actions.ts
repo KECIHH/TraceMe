@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
-import { requireUser } from "@/lib/auth/session";
+import { requireTripAccess } from "@/lib/collaboration";
 import {
   combineDateAndTime,
   dateKey,
@@ -399,7 +399,7 @@ async function countOutOfRangeDays(
 }
 
 async function requireTrip(tripId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const trip = await prisma.trip.findUnique({ where: { id: tripId } });
 
   if (!trip) {

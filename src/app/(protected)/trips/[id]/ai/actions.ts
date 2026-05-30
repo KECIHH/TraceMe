@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
-import { requireUser } from "@/lib/auth/session";
+import { requireTripAccess } from "@/lib/collaboration";
 import {
   buildAiNoteDraft,
   buildPromptStorageInput,
@@ -368,7 +368,7 @@ export async function saveAiDraftAsNoteAction(
 }
 
 async function requireTrip(tripId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const trip = await prisma.trip.findUnique({ where: { id: tripId } });
 
   if (!trip) {
@@ -379,7 +379,7 @@ async function requireTrip(tripId: string) {
 }
 
 async function requireTripWithAiContext(tripId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const trip = await prisma.trip.findUnique({
     include: {
       categoryBudgets: true,

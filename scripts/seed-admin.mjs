@@ -23,17 +23,16 @@ async function main() {
 
   const existingUser = await prisma.user.findUnique({ where: { username } });
 
-  if (existingUser) {
-    await prisma.user.update({
+  const adminUser = existingUser
+    ? await prisma.user.update({
       where: { id: existingUser.id },
       data: {
         displayName: existingUser.displayName ?? "TraceMe Admin",
         role: "ADMIN",
         ...(shouldResetPassword ? { passwordHash: hashPassword(password) } : {}),
       },
-    });
-  } else {
-    await prisma.user.create({
+    })
+    : await prisma.user.create({
       data: {
         username,
         passwordHash: hashPassword(password),
@@ -41,7 +40,6 @@ async function main() {
         role: "ADMIN",
       },
     });
-  }
 
   await prisma.appSetting.upsert({
     where: { key: "app.name" },
@@ -65,19 +63,20 @@ async function main() {
   }
 
   if (process.env.SEED_EXAMPLE_TRIP !== "false") {
-    await createExampleTrip();
+    await createExampleTrip(adminUser.id);
   }
 
   console.log(`Seed complete: admin user "${username}" is ready.`);
 }
 
-async function createExampleTrip() {
+async function createExampleTrip(adminUserId) {
   const existingTrip = await prisma.trip.findFirst({
     select: { id: true },
     where: { title: EXAMPLE_TRIP_TITLE },
   });
 
   if (existingTrip) {
+    await ensureTripOwner(existingTrip.id, adminUserId);
     return;
   }
 
@@ -94,6 +93,15 @@ async function createExampleTrip() {
         mainDestination: "蓝湾市",
         baseCurrency: "CNY",
         budgetAmount: "6800",
+      },
+    });
+
+    await tx.tripMember.create({
+      data: {
+        tripId: trip.id,
+        userId: adminUserId,
+        role: "OWNER",
+        canDownloadSensitiveDocuments: true,
       },
     });
 
@@ -378,6 +386,22 @@ function hashPassword(password) {
   const derivedKey = scryptSync(password, salt, KEY_LENGTH).toString("hex");
 
   return `scrypt:${salt}:${derivedKey}`;
+}
+
+async function ensureTripOwner(tripId, userId) {
+  await prisma.tripMember.upsert({
+    where: { tripId_userId: { tripId, userId } },
+    update: {
+      canDownloadSensitiveDocuments: true,
+      role: "OWNER",
+    },
+    create: {
+      canDownloadSensitiveDocuments: true,
+      role: "OWNER",
+      tripId,
+      userId,
+    },
+  });
 }
 
 main()

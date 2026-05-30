@@ -3,6 +3,7 @@ import { readFile, stat } from "node:fs/promises";
 import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
+import { canAccessDocument, getTripAccessForUser } from "@/lib/collaboration";
 import { decryptDocumentBuffer } from "@/lib/document-encryption";
 import { resolveUploadPath } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
@@ -19,9 +20,19 @@ export async function GET(_request: Request, { params }: ThumbnailRouteContext) 
   }
 
   const { documentId, tripId } = await params;
+  const access = await getTripAccessForUser(tripId, user.id);
+
+  if (!access?.canRead) {
+    return NextResponse.json({ error: "缩略图不存在。" }, { status: 404 });
+  }
+
   const document = await prisma.document.findFirst({
     where: { id: documentId, tripId },
   });
+
+  if (document && !canAccessDocument(access, document)) {
+    return NextResponse.json({ error: "缩略图不存在。" }, { status: 404 });
+  }
 
   if (!document?.thumbnailPath) {
     return NextResponse.json({ error: "缩略图不存在。" }, { status: 404 });

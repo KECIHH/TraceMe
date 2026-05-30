@@ -66,7 +66,7 @@ export async function createAiPlanDraftAction(
 }
 
 export async function applyAiPlanDraftAction(draftId: string) {
-  await requireUser();
+  const user = await requireUser();
 
   const draft = await prisma.aiPlanDraft.findUnique({
     where: { id: draftId },
@@ -79,7 +79,25 @@ export async function applyAiPlanDraftAction(draftId: string) {
   let tripId: string;
 
   try {
-    tripId = await prisma.$transaction((tx) => applyAiPlanDraft(tx, draft));
+    tripId = await prisma.$transaction(async (tx) => {
+      const appliedTripId = await applyAiPlanDraft(tx, draft);
+
+      await tx.tripMember.upsert({
+        create: {
+          canDownloadSensitiveDocuments: true,
+          role: "OWNER",
+          tripId: appliedTripId,
+          userId: user.id,
+        },
+        update: {
+          canDownloadSensitiveDocuments: true,
+          role: "OWNER",
+        },
+        where: { tripId_userId: { tripId: appliedTripId, userId: user.id } },
+      });
+
+      return appliedTripId;
+    });
 
     revalidatePath("/dashboard");
     revalidatePath("/trips");

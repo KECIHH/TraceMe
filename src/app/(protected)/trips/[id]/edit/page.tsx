@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { requireTripAccess } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import { toDateInputValue } from "@/lib/trips";
 
@@ -13,6 +14,7 @@ type EditTripPageProps = {
 
 export default async function EditTripPage({ params }: EditTripPageProps) {
   const { id } = await params;
+  await requireTripAccess(id, "edit");
   const trip = await prisma.trip.findUnique({ where: { id } });
 
   if (!trip) {
@@ -31,7 +33,10 @@ export default async function EditTripPage({ params }: EditTripPageProps) {
         </p>
       </div>
 
-      <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm sm:p-6">
+      <div
+        className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm sm:p-6"
+        data-testid="trip-edit-form"
+      >
         <TripForm
           action={updateAction}
           cancelHref={`/trips/${trip.id}`}

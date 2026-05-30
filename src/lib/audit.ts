@@ -21,7 +21,16 @@ export type AuditAction =
   | "backup.restored"
   | "ai_config.updated"
   | "trip.deleted"
-  | "trip.exported";
+  | "trip.exported"
+  | "trip.member_added"
+  | "trip.member_removed"
+  | "trip.member_updated"
+  | "trip.permission_denied"
+  | "trip.share_accessed"
+  | "trip.share_created"
+  | "trip.share_revoked"
+  | "trip.share_updated"
+  | "user.created";
 
 export type AuditLogInput = {
   action: AuditAction | string;

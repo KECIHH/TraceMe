@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { formatDisplayDateTime, formatEmptyValue } from "@/lib/display-format";
 import { requireUser } from "@/lib/auth/session";
+import { formatDisplayDateTime, formatEmptyValue } from "@/lib/display-format";
 import { formatBytes, getSystemOverview } from "@/lib/settings/system";
 import { isAiEnabledByUserSetting } from "@/server/services/ai/settings";
 
@@ -32,6 +32,11 @@ const quickLinks = [
     label: "安全信息",
   },
   {
+    description: "创建协作用户，并把用户加入旅行成员列表。",
+    href: "/settings/users",
+    label: "用户管理",
+  },
+  {
     description: "查看版本、数据库、存储和维护状态。",
     href: "/settings/system",
     label: "关于系统",
@@ -49,26 +54,26 @@ export default async function SettingsPage() {
         <p className="text-sm font-semibold text-[#2f6f73]">系统设置</p>
         <h1 className="mt-2 text-3xl font-semibold">设置中心</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
-          管理个人资料、登录安全、系统状态、备份和 AI 配置。敏感配置只在服务端读取，不会在页面中展示。
+          管理个人资料、登录安全、系统状态、备份、AI 配置和协作用户。
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <SummaryCard
+          detail={`用户名：${user.username}`}
           label="当前用户"
           value={user.displayName ?? user.username}
-          detail={`用户名：${user.username}`}
         />
         <SummaryCard
-          label="数据库状态"
-          value={system.databaseConnected ? "已连接" : "连接异常"}
           detail={`${system.databaseType}，旅行 ${system.tripCount} 条`}
+          label="数据库状态"
           tone={system.databaseConnected ? "normal" : "danger"}
+          value={system.databaseConnected ? "已连接" : "连接异常"}
         />
         <SummaryCard
+          detail={`上传 ${formatBytes(system.uploadBytes)}，备份 ${formatBytes(system.backupBytes)}`}
           label="存储占用"
           value={formatBytes(system.uploadBytes + system.backupBytes)}
-          detail={`上传 ${formatBytes(system.uploadBytes)}，备份 ${formatBytes(system.backupBytes)}`}
         />
       </div>
 

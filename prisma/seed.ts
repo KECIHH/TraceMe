@@ -18,23 +18,44 @@ async function main() {
 
   const existingUser = await prisma.user.findUnique({ where: { username } });
 
-  if (existingUser) {
-    await prisma.user.update({
+  const adminUser = existingUser
+    ? await prisma.user.update({
       where: { id: existingUser.id },
       data: {
         displayName: existingUser.displayName ?? "TraceMe Admin",
         role: "ADMIN",
         ...(shouldResetPassword ? { passwordHash: hashPassword(password) } : {}),
       },
-    });
-  } else {
-    await prisma.user.create({
+    })
+    : await prisma.user.create({
       data: {
         username,
         passwordHash: hashPassword(password),
         displayName: "TraceMe Admin",
         role: "ADMIN",
       },
+    });
+
+  const tripsWithoutOwner = await prisma.trip.findMany({
+    select: { id: true },
+    where: {
+      members: { none: { role: "OWNER" } },
+    },
+  });
+
+  for (const trip of tripsWithoutOwner) {
+    await prisma.tripMember.upsert({
+      create: {
+        canDownloadSensitiveDocuments: true,
+        role: "OWNER",
+        tripId: trip.id,
+        userId: adminUser.id,
+      },
+      update: {
+        canDownloadSensitiveDocuments: true,
+        role: "OWNER",
+      },
+      where: { tripId_userId: { tripId: trip.id, userId: adminUser.id } },
     });
   }
 

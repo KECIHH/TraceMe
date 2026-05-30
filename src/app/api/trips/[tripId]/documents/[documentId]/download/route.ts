@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { getCurrentUser } from "@/lib/auth/session";
 import { writeAuditLog } from "@/lib/audit";
+import { canAccessDocument, getTripAccessForUser } from "@/lib/collaboration";
 import { checkDocumentDownloadRateLimit } from "@/lib/document-download-rate-limit";
 import { decryptDocumentBuffer } from "@/lib/document-encryption";
 import { resolveUploadPath } from "@/lib/documents";
@@ -21,6 +22,12 @@ export async function GET(_request: Request, { params }: DownloadRouteContext) {
   }
 
   const { documentId, tripId } = await params;
+  const access = await getTripAccessForUser(tripId, user.id);
+
+  if (!access?.canRead) {
+    return NextResponse.json({ error: "文件不存在或无权访问。" }, { status: 404 });
+  }
+
   const rateLimit = checkDocumentDownloadRateLimit(`${user.id}:${tripId}`);
 
   if (!rateLimit.allowed) {
@@ -43,6 +50,10 @@ export async function GET(_request: Request, { params }: DownloadRouteContext) {
 
   if (!document) {
     return NextResponse.json({ error: "文件不存在或无权访问。" }, { status: 404 });
+  }
+
+  if (!canAccessDocument(access, document)) {
+    return NextResponse.json({ error: "无权下载敏感文件。" }, { status: 403 });
   }
 
   let uploadPath: string;

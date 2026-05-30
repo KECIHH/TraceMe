@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
+import { requireTripAccess } from "@/lib/collaboration";
 import {
   buildImportPreview,
   type ChecklistImportData,
@@ -38,6 +39,7 @@ type ImportResult = {
 
 export async function createImportJobAction(tripId: string, formData: FormData) {
   const user = await requireUser();
+  await requireTripAccess(tripId, "edit");
   await requireTrip(tripId);
   const redirectPath = importPath(tripId);
   const importTypeValue = String(formData.get("importType") ?? "");
@@ -104,7 +106,7 @@ export async function confirmImportJobAction(
   importJobId: string,
   formData: FormData,
 ) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   await requireTrip(tripId);
   const redirectPath = importPath(tripId);
   const strategyValue = String(formData.get("conflictStrategy") ?? "skip");

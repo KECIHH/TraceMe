@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
-import { requireUser } from "@/lib/auth/session";
+import { requireTripAccess } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import {
   getRouteWeightPreset,
@@ -341,7 +341,7 @@ function parseWeightsForm(formData: FormData): RouteScoreWeights {
 }
 
 async function requireTrip(tripId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const trip = await prisma.trip.findUnique({ where: { id: tripId } });
 
   if (!trip) {
@@ -352,7 +352,7 @@ async function requireTrip(tripId: string) {
 }
 
 async function requireRoutePlan(tripId: string, routePlanId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const routePlan = await prisma.routePlan.findFirst({
     where: { id: routePlanId, tripId },
   });
@@ -369,7 +369,7 @@ async function requireTransportOption(
   routePlanId: string,
   optionId: string,
 ) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
   const option = await prisma.transportOption.findFirst({
     where: { id: optionId, tripId, routePlanId },
   });

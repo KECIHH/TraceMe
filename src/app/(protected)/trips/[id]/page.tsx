@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SubmitButton } from "@/components/submit-button";
+import { requireUser } from "@/lib/auth/session";
+import { getTripAccessOrNotFound } from "@/lib/collaboration";
 import { formatEmptyValue } from "@/lib/display-format";
 import { formatWeatherSnapshot } from "@/lib/external/weather";
 import { prisma } from "@/lib/prisma";
@@ -34,6 +36,8 @@ export default async function TripDetailPage({
 }: TripDetailPageProps) {
   const { id } = await params;
   const queryParams = (await searchParams) ?? {};
+  const user = await requireUser();
+  const access = await getTripAccessOrNotFound(id, user);
   const trip = await prisma.trip.findUnique({
     include: {
       _count: {
@@ -96,16 +100,30 @@ export default async function TripDetailPage({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
-          <Link
-            className="inline-flex justify-center rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62]"
-            href={`/trips/${trip.id}/edit`}
-          >
-            编辑旅行
-          </Link>
-          {trip.status !== "ARCHIVED" ? (
+          {access.canEdit ? (
+            <Link
+              className="inline-flex justify-center rounded-md bg-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#285f62]"
+              data-testid="edit-trip-link"
+              href={`/trips/${trip.id}/edit`}
+            >
+              编辑旅行
+            </Link>
+          ) : null}
+          {access.canManageMembers ? (
+            <Link
+              className="inline-flex justify-center rounded-md border border-[#2f6f73] px-4 py-2.5 text-sm font-semibold text-[#2f6f73] transition hover:bg-[#edf4f1]"
+              data-testid="trip-members-link"
+              href={`/trips/${trip.id}/members`}
+            >
+              成员与分享
+            </Link>
+          ) : null}
+          {access.canEdit && trip.status !== "ARCHIVED" ? (
             <ArchiveTripForm action={archiveAction} />
           ) : null}
-          <DeleteTripForm action={deleteAction} tripTitle={trip.title} />
+          {access.canDelete ? (
+            <DeleteTripForm action={deleteAction} tripTitle={trip.title} />
+          ) : null}
         </div>
       </div>
 

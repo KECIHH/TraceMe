@@ -1,5 +1,8 @@
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 
+import { requireUser } from "@/lib/auth/session";
+import { visibleTripsWhere } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import {
   formatBudget,
@@ -11,20 +14,24 @@ import {
 } from "@/lib/trips";
 
 export default async function DashboardPage() {
+  const user = await requireUser();
+  const tripWhere = visibleTripsWhere(user.id);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const [totalTrips, planningTrips, completedTrips, recentTrips, upcomingTrips] =
     await Promise.all([
-      prisma.trip.count(),
-      prisma.trip.count({ where: { status: "PLANNING" } }),
-      prisma.trip.count({ where: { status: "COMPLETED" } }),
+      prisma.trip.count({ where: tripWhere }),
+      prisma.trip.count({ where: { ...tripWhere, status: "PLANNING" } }),
+      prisma.trip.count({ where: { ...tripWhere, status: "COMPLETED" } }),
       prisma.trip.findMany({
+        where: tripWhere,
         orderBy: { updatedAt: "desc" },
         take: 4,
       }),
       prisma.trip.findMany({
         where: {
+          ...tripWhere,
           startDate: { gte: today },
           status: { notIn: ["COMPLETED", "ARCHIVED"] },
         },
@@ -96,7 +103,7 @@ function TripPanel({
   trips,
 }: {
   title: string;
-  trips: Awaited<ReturnType<typeof prisma.trip.findMany>>;
+  trips: Prisma.TripGetPayload<Record<string, never>>[];
 }) {
   return (
     <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">

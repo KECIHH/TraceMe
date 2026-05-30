@@ -14,14 +14,21 @@ import {
 import { dateKey, getNearestItineraryDay, getTodayDateMatch } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { getTripAccessForUser } from "@/lib/collaboration";
 
 type RouteContext = {
   params: Promise<{ tripId: string }>;
 };
 
 export async function GET(_request: Request, context: RouteContext) {
-  await requireUser();
+  const user = await requireUser();
   const { tripId } = await context.params;
+  const access = await getTripAccessForUser(tripId, user.id);
+
+  if (!access?.canRead) {
+    return NextResponse.json({ error: "Trip not found." }, { status: 404 });
+  }
+
   const trip = await prisma.trip.findUnique({
     include: {
       checklistItems: {

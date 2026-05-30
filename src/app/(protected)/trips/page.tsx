@@ -2,6 +2,8 @@ import type { Prisma, TripStatus } from "@prisma/client";
 import Link from "next/link";
 
 import { SubmitButton } from "@/components/submit-button";
+import { requireUser } from "@/lib/auth/session";
+import { visibleTripsWhere } from "@/lib/collaboration";
 import { formatEmptyValue } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import {
@@ -24,11 +26,12 @@ type TripsPageProps = {
 };
 
 export default async function TripsPage({ searchParams }: TripsPageProps) {
+  const user = await requireUser();
   const params = (await searchParams) ?? {};
   const query = params.q?.trim() ?? "";
   const status = params.status && isTripStatus(params.status) ? params.status : "";
   const sort = params.sort === "desc" ? "desc" : "asc";
-  const where: Prisma.TripWhereInput = {};
+  const where: Prisma.TripWhereInput = visibleTripsWhere(user.id);
 
   if (query) {
     where.OR = [

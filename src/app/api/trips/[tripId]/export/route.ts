@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { writeAuditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth/session";
+import { getTripAccessForUser } from "@/lib/collaboration";
 import {
   generateTripExportFileName,
   generateTripJsonExport,
@@ -20,6 +21,12 @@ export async function GET(request: Request, { params }: TripExportRouteProps) {
   const { tripId } = await params;
   const url = new URL(request.url);
   const format = url.searchParams.get("format") ?? "json";
+  const access = await getTripAccessForUser(tripId, user.id);
+
+  if (!access?.canRead) {
+    return NextResponse.json({ error: "Trip not found." }, { status: 404 });
+  }
+
   const trip = await prisma.trip.findUnique({
     include: TRIP_EXPORT_INCLUDE,
     where: { id: tripId },

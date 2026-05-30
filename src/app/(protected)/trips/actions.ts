@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 
 import { writeAuditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth/session";
+import { ensureOwnerForNewTrip, requireTripAccess } from "@/lib/collaboration";
 import { resolveUploadPath } from "@/lib/documents";
 import { prisma } from "@/lib/prisma";
 import {
@@ -23,7 +24,7 @@ export async function createTripAction(
   _previousState: TripActionState,
   formData: FormData,
 ): Promise<TripActionState> {
-  await requireUser();
+  const user = await requireUser();
 
   const values = formDataToTripValues(formData);
   const validation = validateTripFormValues(values);
@@ -36,9 +37,24 @@ export async function createTripAction(
     };
   }
 
-  const trip = await prisma.trip.create({
-    data: toTripWriteData(validation.values),
+  const trip = await prisma.$transaction(async (tx) => {
+    const createdTrip = await tx.trip.create({
+      data: toTripWriteData(validation.values),
+    });
+
+    await tx.tripMember.create({
+      data: {
+        canDownloadSensitiveDocuments: true,
+        role: "OWNER",
+        tripId: createdTrip.id,
+        userId: user.id,
+      },
+    });
+
+    return createdTrip;
   });
+
+  await ensureOwnerForNewTrip(trip.id, user.id);
 
   revalidatePath("/dashboard");
   revalidatePath("/trips");
@@ -50,7 +66,7 @@ export async function updateTripAction(
   _previousState: TripActionState,
   formData: FormData,
 ): Promise<TripActionState> {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
 
   const values = formDataToTripValues(formData);
   const validation = validateTripFormValues(values);
@@ -87,7 +103,7 @@ export async function updateTripAction(
 }
 
 export async function archiveTripAction(tripId: string) {
-  await requireUser();
+  await requireTripAccess(tripId, "edit");
 
   try {
     await prisma.trip.update({
@@ -109,7 +125,7 @@ export async function archiveTripAction(tripId: string) {
 }
 
 export async function deleteTripAction(tripId: string) {
-  const user = await requireUser();
+  const { user } = await requireTripAccess(tripId, "delete");
   const documents = await prisma.document.findMany({
     select: { filePath: true },
     where: { tripId },
