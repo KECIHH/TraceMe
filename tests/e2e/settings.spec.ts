@@ -7,22 +7,40 @@ const prisma = new PrismaClient();
 const initialPassword = "SettingsPass123";
 const changedPassword = "SettingsPass456";
 const username = `settings-e2e-${Date.now()}`;
+const regularPassword = "SettingsUserPass123";
+const regularUsername = `settings-user-e2e-${Date.now()}`;
 
 test.beforeAll(async () => {
-  await prisma.user.create({
-    data: {
-      displayName: "Settings E2E",
-      passwordHash: hashPassword(initialPassword),
-      role: "ADMIN",
-      username,
-    },
+  await prisma.$transaction([
+    prisma.user.create({
+      data: {
+        displayName: "Settings E2E",
+        passwordHash: hashPassword(initialPassword),
+        role: "ADMIN",
+        username,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        displayName: "Settings Regular E2E",
+        passwordHash: hashPassword(regularPassword),
+        role: "USER",
+        username: regularUsername,
+      },
+    }),
+  ]);
+});
+
+test.afterEach(async () => {
+  await prisma.backupRecord.deleteMany({
+    where: { fileName: { startsWith: "settings-user-backup-" } },
   });
 });
 
 test.afterAll(async () => {
   await prisma.user
     .deleteMany({
-      where: { username },
+      where: { username: { in: [username, regularUsername] } },
     })
     .catch(() => {});
   await prisma.$disconnect();
@@ -91,6 +109,54 @@ test("user can manage profile, password, AI status, and system info safely", asy
 
   await page.getByRole("button", { name: "重新计算统计" }).click();
   await expect(page.getByText("系统统计已重新计算。")).toBeVisible();
+});
+
+test("regular users cannot access system backup or AI configuration", async ({
+  page,
+}) => {
+  const backup = await prisma.backupRecord.create({
+    data: {
+      fileName: `settings-user-backup-${Date.now()}.zip`,
+      filePath: "storage/backups/settings-user-backup.zip",
+      fileSize: 128,
+      status: "success",
+    },
+  });
+
+  await login(page, regularUsername, regularPassword);
+
+  await page.goto("/settings/backups");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByTestId("backup-record")).toHaveCount(0);
+
+  await page.goto("/settings/ai");
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByText("API Key", { exact: true })).toHaveCount(0);
+
+  const downloadResponse = await page.request.get(
+    `/api/backups/${backup.id}/download`,
+    { maxRedirects: 0 },
+  );
+  expect(downloadResponse.status()).toBe(307);
+  expect(downloadResponse.headers().location).toContain("/dashboard");
+
+  const deleteResponse = await page.request.post(
+    `/api/backups/${backup.id}/delete`,
+    { maxRedirects: 0 },
+  );
+  expect(deleteResponse.status()).toBe(307);
+  expect(deleteResponse.headers().location).toContain("/dashboard");
+
+  await expect
+    .poll(async () => {
+      const record = await prisma.backupRecord.findUnique({
+        select: { status: true },
+        where: { id: backup.id },
+      });
+
+      return record?.status;
+    })
+    .toBe("success");
 });
 
 async function login(page: Page, loginUsername: string, loginPassword: string) {

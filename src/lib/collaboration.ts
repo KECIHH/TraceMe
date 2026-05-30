@@ -1,6 +1,7 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import type {
+  ChecklistItem,
   Document,
   DocumentType,
   Place,
@@ -14,7 +15,7 @@ import { notFound, redirect } from "next/navigation";
 import { writeAuditLog } from "@/lib/audit";
 import { verifyPassword, hashPassword } from "@/lib/auth/password";
 import type { AuthUser } from "@/lib/auth/session";
-import { requireUser } from "@/lib/auth/session";
+import { requireUser, shouldUseSecureCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 export type TripPermission =
@@ -51,10 +52,18 @@ export type PublicTripDocument = Pick<
   "id" | "mimeType" | "originalFileName" | "title" | "type"
 >;
 
+export type PublicTripChecklistItem = Pick<
+  ChecklistItem,
+  "category" | "id" | "title"
+>;
+
 export type PublicTripPlace<T extends Place & { stayDetail?: StayDetail | null }> =
   Omit<T, "stayDetail"> & {
     stayDetail?: Omit<StayDetail, "bookingReference"> | null;
   };
+
+export const SHARE_UNLOCK_COOKIE_NAME_PREFIX = "traceme_share_unlock_";
+export const SHARE_UNLOCK_MAX_AGE_SECONDS = 60 * 30;
 
 export const TRIP_MEMBER_ROLE_OPTIONS: Array<{
   label: string;
@@ -198,6 +207,89 @@ export function hashSharePassword(password: string): string {
   return hashPassword(password);
 }
 
+export function getShareUnlockCookieName(tokenHash: string): string {
+  return `${SHARE_UNLOCK_COOKIE_NAME_PREFIX}${tokenHash.slice(0, 32)}`;
+}
+
+export function createShareUnlockCookieValue(input: {
+  now?: Date;
+  passwordHash: string;
+  secret?: string;
+  tokenHash: string;
+}): { expiresAt: Date; value: string } {
+  const now = input.now ?? new Date();
+  const expiresAt = new Date(
+    now.getTime() + SHARE_UNLOCK_MAX_AGE_SECONDS * 1000,
+  );
+  const expiresAtMs = expiresAt.getTime();
+  const signature = signShareUnlockCookie({
+    expiresAtMs,
+    passwordHash: input.passwordHash,
+    secret: input.secret,
+    tokenHash: input.tokenHash,
+  });
+
+  return {
+    expiresAt,
+    value: `${input.tokenHash}.${expiresAtMs}.${signature}`,
+  };
+}
+
+export function verifyShareUnlockCookie(input: {
+  cookieValue: string | null | undefined;
+  now?: Date;
+  passwordHash: string | null | undefined;
+  secret?: string;
+  tokenHash: string;
+}): boolean {
+  if (!input.passwordHash) {
+    return true;
+  }
+
+  if (!input.cookieValue) {
+    return false;
+  }
+
+  const parts = input.cookieValue.split(".");
+  if (parts.length !== 3) {
+    return false;
+  }
+
+  const [tokenHash, expiresAtMsValue, signature] = parts;
+  if (tokenHash !== input.tokenHash || !/^\d+$/.test(expiresAtMsValue)) {
+    return false;
+  }
+
+  const expiresAtMs = Number(expiresAtMsValue);
+  const now = input.now ?? new Date();
+  if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= now.getTime()) {
+    return false;
+  }
+
+  const expectedSignature = signShareUnlockCookie({
+    expiresAtMs,
+    passwordHash: input.passwordHash,
+    secret: input.secret,
+    tokenHash: input.tokenHash,
+  });
+
+  return timingSafeEqualHex(signature, expectedSignature);
+}
+
+export function getShareUnlockCookieOptions(
+  expiresAt: Date,
+  nodeEnv = process.env.NODE_ENV,
+  appBaseUrl = process.env.APP_BASE_URL,
+) {
+  return {
+    expires: expiresAt,
+    httpOnly: true,
+    path: "/share",
+    sameSite: "lax",
+    secure: shouldUseSecureCookies(nodeEnv, appBaseUrl),
+  } as const;
+}
+
 export function filterPublicDocuments<T extends Document>(
   documents: T[],
 ): PublicTripDocument[] {
@@ -212,6 +304,18 @@ export function filterPublicDocuments<T extends Document>(
       originalFileName: document.originalFileName,
       title: document.title,
       type: document.type,
+    }));
+}
+
+export function filterPublicChecklistItems<
+  T extends Pick<ChecklistItem, "category" | "id" | "notes" | "title">,
+>(items: T[]): PublicTripChecklistItem[] {
+  return items
+    .filter((item) => !isSensitiveChecklistItem(item))
+    .map((item) => ({
+      category: item.category,
+      id: item.id,
+      title: item.title,
     }));
 }
 
@@ -396,3 +500,37 @@ const SENSITIVE_DOCUMENT_TYPES = new Set<DocumentType>([
   "INSURANCE",
   "RECEIPT",
 ]);
+
+const SENSITIVE_CHECKLIST_PATTERN =
+  /(护照|身份证|证件|签证|保单|保险|订单|预订|预约|票号|航班号|车次|联系人|紧急联系人|电话|手机号|邮箱|住址|银行卡|信用卡|支付|付款|密码|口令|密钥|健康|病历|处方|passport|id\s*card|visa|insurance|booking|reservation|order|ticket\s*number|contact|phone|email|address|card|payment|password|secret|token|api\s*key|medical|prescription)/i;
+
+function isSensitiveChecklistItem(
+  item: Pick<ChecklistItem, "category" | "notes" | "title">,
+): boolean {
+  return SENSITIVE_CHECKLIST_PATTERN.test(
+    [item.category, item.title, item.notes].filter(Boolean).join(" "),
+  );
+}
+
+function signShareUnlockCookie(input: {
+  expiresAtMs: number;
+  passwordHash: string;
+  secret?: string;
+  tokenHash: string;
+}): string {
+  return createHmac("sha256", getShareUnlockSecret(input.secret))
+    .update(`${input.tokenHash}:${input.passwordHash}:${input.expiresAtMs}`)
+    .digest("hex");
+}
+
+function getShareUnlockSecret(secret = process.env.SESSION_SECRET): string {
+  return secret?.trim() || "traceme-dev-share-unlock-secret";
+}
+
+function timingSafeEqualHex(value: string, expected: string): boolean {
+  if (!/^[a-f0-9]{64}$/i.test(value) || !/^[a-f0-9]{64}$/i.test(expected)) {
+    return false;
+  }
+
+  return timingSafeEqual(Buffer.from(value, "hex"), Buffer.from(expected, "hex"));
+}

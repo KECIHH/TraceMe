@@ -4,11 +4,14 @@ import {
   buildTripAccess,
   canAccessDocument,
   canTripRole,
+  createShareUnlockCookieValue,
   filterPublicDocuments,
+  filterPublicChecklistItems,
   filterPublicPlace,
   hashSharePassword,
   isTripMemberRole,
   shouldShareLinkBeAccessible,
+  verifyShareUnlockCookie,
   verifySharePassword,
 } from "@/lib/collaboration";
 
@@ -110,6 +113,59 @@ describe("share link safety", () => {
       ok: true,
     });
   });
+
+  it("stores share password unlock state in a signed expiring cookie proof", () => {
+    const passwordHash = hashSharePassword("correct horse battery");
+    const tokenHash = "a".repeat(64);
+    const secret = "unit-test-share-unlock-secret";
+    const now = new Date("2026-05-30T10:00:00.000Z");
+    const unlock = createShareUnlockCookieValue({
+      now,
+      passwordHash,
+      secret,
+      tokenHash,
+    });
+
+    expect(unlock.value).not.toContain("correct horse battery");
+    expect(
+      verifyShareUnlockCookie({
+        cookieValue: unlock.value,
+        now,
+        passwordHash,
+        secret,
+        tokenHash,
+      }),
+    ).toBe(true);
+    expect(
+      verifyShareUnlockCookie({
+        cookieValue: unlock.value,
+        now,
+        passwordHash,
+        secret,
+        tokenHash: "b".repeat(64),
+      }),
+    ).toBe(false);
+    expect(
+      verifyShareUnlockCookie({
+        cookieValue: unlock.value.replace(/[a-f0-9]$/i, (value) =>
+          value.toLowerCase() === "0" ? "1" : "0",
+        ),
+        now,
+        passwordHash,
+        secret,
+        tokenHash,
+      }),
+    ).toBe(false);
+    expect(
+      verifyShareUnlockCookie({
+        cookieValue: unlock.value,
+        now: new Date("2026-05-30T10:31:00.000Z"),
+        passwordHash,
+        secret,
+        tokenHash,
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("public share filtering", () => {
@@ -195,5 +251,36 @@ describe("public share filtering", () => {
     });
 
     expect(place.stayDetail).not.toHaveProperty("bookingReference");
+  });
+
+  it("filters checklist items likely to contain sensitive travel details", () => {
+    const items = [
+      {
+        category: "行前准备",
+        id: "item_public",
+        notes: null,
+        title: "带雨伞",
+      },
+      {
+        category: "证件",
+        id: "item_passport",
+        notes: null,
+        title: "检查护照和签证",
+      },
+      {
+        category: "住宿",
+        id: "item_booking",
+        notes: "ORDER-SECRET-123",
+        title: "酒店订单号",
+      },
+    ];
+
+    expect(filterPublicChecklistItems(items)).toEqual([
+      {
+        category: "行前准备",
+        id: "item_public",
+        title: "带雨伞",
+      },
+    ]);
   });
 });

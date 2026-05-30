@@ -1,19 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { writeAuditLog } from "@/lib/audit";
-import { getCurrentUser } from "@/lib/auth/session";
 import { deleteBackupRecord } from "@/lib/backup/delete";
+import { requireAdmin } from "@/lib/collaboration";
 
 type BackupDeleteRouteProps = {
   params: Promise<{ backupId: string }>;
 };
 
 export async function POST(request: Request, { params }: BackupDeleteRouteProps) {
-  const user = await getCurrentUser();
-
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
+  const user = await requireAdmin();
 
   const { backupId } = await params;
   const result = await deleteBackupRecord(backupId);

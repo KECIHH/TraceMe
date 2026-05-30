@@ -2,8 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 
 import { NextResponse } from "next/server";
 
-import { requireUser } from "@/lib/auth/session";
 import { resolveBackupPath } from "@/lib/backup/paths";
+import { requireAdmin } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 
 type BackupDownloadRouteProps = {
@@ -11,7 +11,7 @@ type BackupDownloadRouteProps = {
 };
 
 export async function GET(_request: Request, { params }: BackupDownloadRouteProps) {
-  await requireUser();
+  await requireAdmin();
   const { backupId } = await params;
   const record = await prisma.backupRecord.findUnique({
     where: { id: backupId },

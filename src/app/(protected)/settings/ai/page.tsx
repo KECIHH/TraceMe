@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { SubmitButton } from "@/components/submit-button";
 import { AI_ADVANCED_TASKS } from "@/lib/ai/advanced";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/collaboration";
 import { getSafeAiProviderConfig } from "@/server/services/ai/provider-config";
 import {
   getAiPromptTemplates,
@@ -25,7 +25,7 @@ type AiSettingsPageProps = {
 export default async function AiSettingsPage({
   searchParams,
 }: AiSettingsPageProps) {
-  await requireUser();
+  await requireAdmin();
   const notice = (await searchParams) ?? {};
   const aiEnabled = await isAiEnabledByUserSetting();
   const aiConfig = await getSafeAiProviderConfig();

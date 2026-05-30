@@ -26,6 +26,9 @@ test("administrator can invite members and enforce trip/share isolation", async 
   const publicDocumentTitle = `Stage20 public document ${suffix}`;
   const sensitiveDocumentTitle = `Stage20 sensitive passport ${suffix}`;
   const bookingReference = `ORDER-STAGE20-SECRET-${suffix}`;
+  const sharePassword = `Stage20SharePass-${suffix}`;
+  const publicChecklistTitle = `Stage20 pack umbrella ${suffix}`;
+  const sensitiveChecklistTitle = `Stage20 passport ${suffix}`;
 
   await loginAs(page, adminUsername, adminPassword);
   await createUserThroughUi(page, viewerUsername, "Stage20 Viewer");
@@ -61,6 +64,19 @@ test("administrator can invite members and enforce trip/share isolation", async 
           },
           type: "HOTEL",
         },
+      },
+      checklistItems: {
+        create: [
+          {
+            category: "Packing",
+            title: publicChecklistTitle,
+          },
+          {
+            category: "证件",
+            notes: `Passport ${suffix}`,
+            title: sensitiveChecklistTitle,
+          },
+        ],
       },
       documents: {
         create: [
@@ -149,14 +165,27 @@ test("administrator can invite members and enforce trip/share isolation", async 
 
   await loginAs(page, adminUsername, adminPassword);
   await page.goto(`/trips/${trip.id}/members`);
-  const shareUrl = await createShareLinkThroughUi(page, trip.id, suffix);
+  const shareUrl = await createShareLinkThroughUi(
+    page,
+    trip.id,
+    suffix,
+    sharePassword,
+  );
 
   await page.goto(shareUrl.pathname);
+  await expect(page.locator('input[name="password"]')).toBeVisible();
+  await page.locator('input[name="password"]').fill(sharePassword);
+  await page.locator('button[type="submit"]').click();
+  await page.waitForURL((url) => url.pathname === shareUrl.pathname);
+  expect(page.url()).not.toContain(sharePassword);
+  expect(new URL(page.url()).searchParams.has("password")).toBe(false);
   await expect(page.getByTestId("public-share-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: editedTitle })).toBeVisible();
   await expect(page.locator("body")).toContainText(publicDocumentTitle);
   await expect(page.locator("body")).not.toContainText(sensitiveDocumentTitle);
   await expect(page.locator("body")).not.toContainText(bookingReference);
+  await expect(page.locator("body")).toContainText(publicChecklistTitle);
+  await expect(page.locator("body")).not.toContainText(sensitiveChecklistTitle);
   await expect(page.getByTestId("edit-trip-link")).toHaveCount(0);
 
   await prisma.tripShareLink.update({
@@ -231,12 +260,16 @@ async function createShareLinkThroughUi(
   page: Page,
   tripId: string,
   suffix: number,
+  password?: string,
 ) {
   await page.goto(`/trips/${tripId}/members`);
   const form = page.getByTestId("create-share-link-form");
 
   await expect(form).toBeVisible();
   await form.locator('input[name="label"]').fill(`Stage20 share ${suffix}`);
+  if (password) {
+    await form.locator('input[name="password"]').fill(password);
+  }
   await form.locator('input[name="isEnabled"]').check();
   await form.locator('button[type="submit"]').click();
 

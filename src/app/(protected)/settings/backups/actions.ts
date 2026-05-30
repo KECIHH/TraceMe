@@ -5,10 +5,10 @@ import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit";
 import { createSystemBackup } from "@/lib/backup";
-import { requireUser } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/collaboration";
 
 export async function createBackupAction(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireAdmin();
   const notes = String(formData.get("notes") ?? "");
   const result = await createSystemBackup(notes);
   await writeAuditLog({

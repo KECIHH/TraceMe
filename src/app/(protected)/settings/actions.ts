@@ -14,6 +14,7 @@ import {
   getCurrentSessionTokenHash,
   requireUser,
 } from "@/lib/auth/session";
+import { requireAdmin } from "@/lib/collaboration";
 import { prisma } from "@/lib/prisma";
 import { validatePasswordChangeFields } from "@/lib/settings/password";
 import {
@@ -29,7 +30,7 @@ import {
 } from "@/server/services/ai/settings";
 
 export async function setAiEnabledAction(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireAdmin();
   const enabled = formData.get("enabled") === "true";
   await setAiEnabledByUserSetting(enabled);
   await writeAuditLog({
@@ -43,7 +44,7 @@ export async function setAiEnabledAction(formData: FormData) {
 }
 
 export async function updateAiProviderConfigAction(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireAdmin();
   const providerValue = String(formData.get("provider") ?? "");
 
   if (!isAiProviderName(providerValue)) {
@@ -75,7 +76,7 @@ export async function updateAiProviderConfigAction(formData: FormData) {
 }
 
 export async function testAiProviderConfigAction() {
-  await requireUser();
+  await requireAdmin();
   const config = await resolveAiProviderConfig();
   const result = await testAiProviderConnection(config);
 
@@ -88,7 +89,7 @@ export async function testAiProviderConfigAction() {
 }
 
 export async function deleteAiProviderConfigAction() {
-  const user = await requireUser();
+  const user = await requireAdmin();
   await deleteAiProviderConfig();
   await writeAuditLog({
     action: "ai_provider.deleted",
@@ -102,7 +103,7 @@ export async function deleteAiProviderConfigAction() {
 }
 
 export async function updateAiPromptTemplatesAction(formData: FormData) {
-  const user = await requireUser();
+  const user = await requireAdmin();
   const templates = mergePromptTemplates(
     Object.fromEntries(
       AI_ADVANCED_TASKS.map((task) => [

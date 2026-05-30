@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { SubmitButton } from "@/components/submit-button";
 import { formatBackupFileSize, listBackupFiles } from "@/lib/backup/files";
+import { requireAdmin } from "@/lib/collaboration";
 import { formatDisplayDateTime } from "@/lib/display-format";
 import { prisma } from "@/lib/prisma";
 import { Notice } from "@/app/(protected)/trips/[id]/module-nav";
@@ -14,6 +15,7 @@ type BackupsPageProps = {
 };
 
 export default async function BackupsPage({ searchParams }: BackupsPageProps) {
+  await requireAdmin();
   const notice = (await searchParams) ?? {};
   const [records, files] = await Promise.all([
     prisma.backupRecord.findMany({ orderBy: { createdAt: "desc" } }),

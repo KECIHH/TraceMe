@@ -1,15 +1,18 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { SubmitButton } from "@/components/submit-button";
 import { inputClassName, primaryButtonClassName, StatusPill } from "@/components/ui";
 import { writeAuditLog } from "@/lib/audit";
 import {
+  filterPublicChecklistItems,
   filterPublicDocuments,
   filterPublicPlace,
+  getShareUnlockCookieName,
   hashShareToken,
   shouldShareLinkBeAccessible,
-  verifySharePassword,
+  verifyShareUnlockCookie,
 } from "@/lib/collaboration";
 import { formatBudget, formatTripDateRange } from "@/lib/trips";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +29,7 @@ export const metadata: Metadata = {
 
 type SharePageProps = {
   params: Promise<{ token: string }>;
-  searchParams?: Promise<{ password?: string }>;
+  searchParams?: Promise<{ unlock?: string }>;
 };
 
 export default async function SharePage({
@@ -35,6 +38,7 @@ export default async function SharePage({
 }: SharePageProps) {
   const { token } = await params;
   const query = (await searchParams) ?? {};
+  const tokenHash = hashShareToken(token);
   const link = await prisma.tripShareLink.findUnique({
     include: {
       trip: {
@@ -69,7 +73,7 @@ export default async function SharePage({
         },
       },
     },
-    where: { tokenHash: hashShareToken(token) },
+    where: { tokenHash },
   });
   const access = shouldShareLinkBeAccessible(link);
 
@@ -101,15 +105,21 @@ export default async function SharePage({
     );
   }
 
-  const passwordCheck = verifySharePassword(query.password, link.passwordHash);
+  const cookieStore = await cookies();
+  const passwordUnlocked = verifyShareUnlockCookie({
+    cookieValue: cookieStore.get(getShareUnlockCookieName(tokenHash))?.value,
+    passwordHash: link.passwordHash,
+    tokenHash,
+  });
 
-  if (!passwordCheck.ok) {
+  if (!passwordUnlocked) {
     await writeAuditLog({
       action: "trip.share_accessed",
       entityId: link.id,
       entityType: "TripShareLink",
       metadata: {
-        deniedReason: passwordCheck.reason,
+        deniedReason:
+          query.unlock === "failed" ? "wrong_password" : "missing_password",
         tripId: link.tripId,
       },
     });
@@ -129,7 +139,7 @@ export default async function SharePage({
                 type="password"
               />
             </label>
-            {passwordCheck.reason === "wrong_password" ? (
+            {query.unlock === "failed" ? (
               <p className="text-sm text-[#9b2f1f]">密码不正确。</p>
             ) : null}
             <SubmitButton className={primaryButtonClassName}>
@@ -154,6 +164,7 @@ export default async function SharePage({
 
   const trip = link.trip;
   const publicDocuments = filterPublicDocuments(trip.documents);
+  const publicChecklistItems = filterPublicChecklistItems(trip.checklistItems);
   const publicPlaces = trip.places.map(filterPublicPlace);
   const stays = publicPlaces.filter((place) => place.stayDetail);
   const foods = publicPlaces.filter((place) => place.foodDetail);
@@ -268,12 +279,12 @@ export default async function SharePage({
         </Section>
 
         <Section title="准备清单">
-          {trip.checklistItems.length === 0 ? (
+          {publicChecklistItems.length === 0 ? (
             <Empty text="暂无清单。" />
           ) : (
             <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
               <ul className="grid gap-2 sm:grid-cols-2">
-                {trip.checklistItems.map((item) => (
+                {publicChecklistItems.map((item) => (
                   <li className="text-sm" key={item.id}>
                     <span className="font-medium">{item.category}</span> / {item.title}
                   </li>
