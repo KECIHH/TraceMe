@@ -10,7 +10,7 @@ TraceMe 当前定位为私有部署的旅行规划网站。生产环境可以通
 
 ## 一键部署
 
-一键部署脚本仍然保留。生产环境必须显式提供 HTTPS 域名：
+一键部署脚本仍然保留。正式域名访问请显式提供 HTTPS 域名：
 
 Linux / 云服务器：
 
@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-wind
 
 脚本会完成 clone/pull、生成 `.env`、拉取预构建镜像或本地构建、启动容器、执行 `docker compose run --rm seed-admin`、等待 `/api/health` 正常。
 
-如果服务器上已有旧 `.env`，再次运行脚本并传入 `APP_BASE_URL=https://travel.example.com` 会自动更新 `.env` 中的旧 `APP_BASE_URL`。如果旧值仍是 `http://服务器IP:端口` 且没有传入新值，脚本会在启动容器前提示修正，避免容器反复报 `APP_BASE_URL must use https in production`。
+如果服务器上已有旧 `.env`，再次运行脚本并传入新的 `APP_BASE_URL` 会自动更新 `.env` 中的旧值。域名访问必须使用 HTTPS；测试期还没有配好域名时，可以临时使用 `APP_BASE_URL=http://服务器IP:3000`。
 
 常用参数：
 
@@ -154,7 +154,7 @@ seed 管理员时额外要求：
 
 规则：
 
-- `APP_BASE_URL` 面向公网域名时必须是 HTTPS URL；本地 Docker 冒烟测试允许 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
+- `APP_BASE_URL` 面向域名时必须是 HTTPS URL；测试期允许 `http://服务器IP:3000`，本地 Docker 冒烟测试允许 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
 - `SESSION_SECRET` 至少 32 字符。
 - 生产环境不能使用示例 `SESSION_SECRET` 或示例管理员密码。
 - 错误信息只说明变量名和规则，不打印 secret 原文。
@@ -177,7 +177,7 @@ npm run dev
 http://localhost:3000
 ```
 
-生产环境不要使用 HTTP `APP_BASE_URL`。
+域名访问不要使用 HTTP `APP_BASE_URL`；测试期 IP 直连可临时使用 HTTP。
 
 ## 数据库 migration
 

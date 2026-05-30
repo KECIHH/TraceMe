@@ -229,6 +229,8 @@ is_valid_app_base_url() {
   case "$value" in
     https://*) return 0 ;;
     http://localhost:*|http://127.0.0.1:*|http://[::1]:*) return 0 ;;
+    http://[0-9]*.[0-9]*.[0-9]*.[0-9]*:*) return 0 ;;
+    http://\[*:*) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -252,11 +254,15 @@ ensure_app_base_url_ready() {
   cat >&2 <<EOF_APP_BASE_URL
 Invalid APP_BASE_URL in $INSTALL_DIR/.env: ${saved_app_base_url:-<empty>}
 
-Production domain access must use HTTPS. Re-run with your HTTPS domain, for example:
+Domain access must use HTTPS. Re-run with your HTTPS domain, for example:
 
   APP_BASE_URL=https://travel.example.com bash scripts/bootstrap-linux.sh
 
-For a local smoke test only, use:
+For temporary IP testing before the domain is ready, use:
+
+  APP_BASE_URL=http://YOUR_SERVER_IP:${TRACEME_PORT} bash scripts/bootstrap-linux.sh
+
+For a local smoke test, use:
 
   APP_BASE_URL=http://127.0.0.1:${TRACEME_PORT} bash scripts/bootstrap-linux.sh
 

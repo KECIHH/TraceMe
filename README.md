@@ -64,7 +64,7 @@ http://localhost:3000
 
 ## 一键部署
 
-一键部署仍然可用。生产环境现在要求显式提供 HTTPS 域名：
+一键部署仍然可用。正式域名访问请显式提供 HTTPS 域名：
 
 Linux / 云服务器：
 
@@ -101,12 +101,21 @@ irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-wind
 - `INITIAL_ADMIN_USERNAME`: 初始管理员用户名，默认 `admin`。
 - `SEED_EXAMPLE_TRIP=false`: 跳过虚构示例旅行。
 
-如果看到 `APP_BASE_URL must use https in production`，通常是旧 `.env` 里仍然保存着 `http://服务器IP:端口`。重新运行一键部署并显式传入 HTTPS 域名即可自动修正：
+如果域名已经准备好，推荐直接传入 HTTPS 域名：
 
 ```bash
 cd ~/traceme
 APP_BASE_URL=https://travel.example.com bash scripts/bootstrap-linux.sh
 ```
+
+如果还在测试、暂时只能用服务器 IP 和端口访问，也可以临时传入：
+
+```bash
+cd ~/traceme
+APP_BASE_URL=http://YOUR_SERVER_IP:3000 bash scripts/bootstrap-linux.sh
+```
+
+切换到域名后，再用 HTTPS 域名重新运行脚本即可写回 `.env`。
 
 ## 手动 Docker 部署
 
@@ -120,7 +129,7 @@ docker compose run --rm seed-admin
 
 生产环境要点：
 
-- `APP_BASE_URL` 面向公网域名时必须是 HTTPS URL，例如 `https://travel.example.com`；本地 Docker 冒烟测试可使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
+- `APP_BASE_URL` 面向域名时必须是 HTTPS URL，例如 `https://travel.example.com`；测试期可临时使用 `http://服务器IP:3000`，本地冒烟测试可使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
 - `SESSION_SECRET` 至少 32 字符，不能使用示例值。
 - `INITIAL_ADMIN_PASSWORD` 仅 seed 管理员时需要，生产环境不能使用默认弱密码。
 - 主应用容器不注入 `INITIAL_ADMIN_PASSWORD`，seed 管理员使用一次性 `seed-admin` 服务。
@@ -171,7 +180,7 @@ docker compose run --rm seed-admin
 必填：
 
 - `DATABASE_URL`: SQLite 连接字符串。Docker 默认 `file:/app/prisma/data/traceme.db`。
-- `APP_BASE_URL`: 生产域名必须是 HTTPS；本地 loopback 冒烟测试可用 HTTP。
+- `APP_BASE_URL`: 域名访问必须是 HTTPS；测试期 IP 直连和本机 loopback 冒烟测试可用 HTTP。
 - `SESSION_SECRET`: 长随机字符串，至少 32 字符。
 - `INITIAL_ADMIN_USERNAME`: 初始管理员用户名。
 - `INITIAL_ADMIN_PASSWORD`: 仅 seed 管理员时需要，必须替换示例弱密码。
@@ -200,7 +209,7 @@ Docker Compose 使用三个 volume：
 
 - 网站默认强制登录，暂不开放注册。
 - 登录接口有基础限流。
-- session cookie 在生产环境使用 `httpOnly`、`sameSite=lax`、`secure`。
+- session cookie 使用 `httpOnly`、`sameSite=lax`；HTTPS 域名访问时使用 `secure`，临时 HTTP IP 测试时不启用 `secure`，以保证浏览器能保存登录态。
 - 不返回 `passwordHash`。
 - AI Key 只能在服务端环境变量中使用。
 - 默认安全响应头包含 `X-Content-Type-Options`、`X-Frame-Options`、`Referrer-Policy`、`Permissions-Policy` 和基础 `Content-Security-Policy`。

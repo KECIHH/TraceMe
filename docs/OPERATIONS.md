@@ -150,7 +150,7 @@ docker compose exec -T travel-planner npx prisma migrate deploy
 - 确认使用正确的 `INITIAL_ADMIN_USERNAME`。
 - 如需重置密码，设置 `RESET_ADMIN_PASSWORD=true` 后重新执行 seed。
 - 检查浏览器是否阻止 cookie。
-- 确认生产环境通过 HTTPS 访问，否则 secure cookie 不会在 HTTP 下发送。
+- 如果使用域名访问，确认走 HTTPS；如果还在用 `http://服务器IP:3000` 测试，确认 `.env` 中 `APP_BASE_URL` 也是该 IP 地址，系统会临时关闭 cookie 的 `secure` 属性以保证登录态可用。
 
 ### 数据库连接失败
 

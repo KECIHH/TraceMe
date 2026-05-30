@@ -132,4 +132,4 @@ TRACEME_BIND="127.0.0.1"
 TRACEME_PORT="3000"
 ```
 
-生产域名的 `APP_BASE_URL` 必须是 HTTPS URL，否则启动校验会失败。本地 Docker 冒烟测试可以临时使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。
+域名访问时，`APP_BASE_URL` 必须是 HTTPS URL，否则启动校验会失败。域名尚未配置完成时，可以临时使用 `http://服务器IP:3000` 测试；本地 Docker 冒烟测试也可以使用 `http://localhost:3000` 或 `http://127.0.0.1:3000`。切换到域名后，请改回 `https://travel.example.com`。

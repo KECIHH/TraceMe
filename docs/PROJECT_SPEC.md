@@ -56,7 +56,7 @@ TraceMe（迹遇）是一个私有部署的旅行规划网站（Private Travel P
 
 - 默认强制登录。
 - 暂不开放注册，管理员通过 seed 创建。
-- 生产环境 cookie 必须 `secure`、`httpOnly`、`sameSite=lax`。
+- cookie 必须 `httpOnly`、`sameSite=lax`；HTTPS 域名访问时必须 `secure`，临时 HTTP IP 测试时允许不启用 `secure`。
 - 登录失败有基础限流。
 - API 不返回 `passwordHash`。
 - `/api/health` 不返回密钥、数据库绝对路径、用户信息、文件路径或完整环境变量。

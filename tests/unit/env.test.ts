@@ -66,7 +66,7 @@ describe("production environment validation", () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain(
-      "APP_BASE_URL must use https in production, except loopback HTTP for local smoke tests.",
+      "APP_BASE_URL must use https for domain access; HTTP is only allowed for IP or loopback testing.",
     );
     expect(result.errors).toContain(
       "NODE_ENV must be production for private deployment.",
@@ -84,6 +84,21 @@ describe("production environment validation", () => {
       validateProductionEnvironment({
         ...validEnv,
         APP_BASE_URL: "http://127.0.0.1:3000",
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("allows HTTP IP access for temporary deployment testing", () => {
+    expect(
+      validateProductionEnvironment({
+        ...validEnv,
+        APP_BASE_URL: "http://203.0.113.10:3000",
+      }).ok,
+    ).toBe(true);
+    expect(
+      validateProductionEnvironment({
+        ...validEnv,
+        APP_BASE_URL: "http://[2001:db8::10]:3000",
       }).ok,
     ).toBe(true);
   });

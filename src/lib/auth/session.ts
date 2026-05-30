@@ -96,8 +96,59 @@ export function shouldUseSecureCookies(
   nodeEnv = process.env.NODE_ENV,
   appBaseUrl = process.env.APP_BASE_URL,
 ) {
-  void appBaseUrl;
-  return nodeEnv === "production";
+  if (nodeEnv !== "production") {
+    return false;
+  }
+
+  if (!appBaseUrl) {
+    return true;
+  }
+
+  try {
+    const url = new URL(appBaseUrl);
+
+    if (url.protocol === "https:") {
+      return true;
+    }
+
+    if (url.protocol === "http:" && isAllowedInsecureCookieHost(url.hostname)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function isAllowedInsecureCookieHost(hostname: string) {
+  const normalized = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+
+  return (
+    ["localhost", "127.0.0.1", "::1"].includes(normalized) ||
+    isIpv4Address(normalized) ||
+    isIpv6Address(normalized)
+  );
+}
+
+function isIpv4Address(hostname: string) {
+  const parts = hostname.split(".");
+
+  return (
+    parts.length === 4 &&
+    parts.every((part) => {
+      if (!/^\d{1,3}$/.test(part)) {
+        return false;
+      }
+
+      const value = Number(part);
+      return value >= 0 && value <= 255;
+    })
+  );
+}
+
+function isIpv6Address(hostname: string) {
+  return /^[0-9a-f:]+$/.test(hostname) && hostname.includes(":");
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {

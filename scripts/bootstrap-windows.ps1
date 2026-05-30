@@ -128,7 +128,9 @@ function Test-AppBaseUrl {
   return $Value.StartsWith("https://") -or
     $Value.StartsWith("http://localhost:") -or
     $Value.StartsWith("http://127.0.0.1:") -or
-    $Value.StartsWith("http://[::1]:")
+    $Value.StartsWith("http://[::1]:") -or
+    ($Value -match "^http://\d{1,3}(\.\d{1,3}){3}:") -or
+    ($Value -match "^http://\[[0-9A-Fa-f:]+\]:")
 }
 
 function Ensure-AppBaseUrlReady {
@@ -149,10 +151,13 @@ function Ensure-AppBaseUrlReady {
   throw @"
 Invalid APP_BASE_URL in $InstallDir\.env: $savedAppBaseUrl
 
-Production domain access must use HTTPS. Re-run with your HTTPS domain, for example:
+Domain access must use HTTPS. Re-run with your HTTPS domain, for example:
   `$env:APP_BASE_URL='https://travel.example.com'; .\scripts\bootstrap-windows.ps1
 
-For a local smoke test only, use:
+For temporary IP testing before the domain is ready, use:
+  `$env:APP_BASE_URL='http://YOUR_SERVER_IP:$TraceMePort'; .\scripts\bootstrap-windows.ps1
+
+For a local smoke test, use:
   `$env:APP_BASE_URL='http://127.0.0.1:$TraceMePort'; .\scripts\bootstrap-windows.ps1
 "@
 }

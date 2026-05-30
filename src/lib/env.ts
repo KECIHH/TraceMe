@@ -74,20 +74,50 @@ function requireAppBaseUrl(errors: string[], env: AppEnvironment) {
       return;
     }
 
-    if (url.protocol === "http:" && isLoopbackHost(url.hostname)) {
+    if (url.protocol === "http:" && isAllowedHttpHost(url.hostname)) {
       return;
     }
 
     errors.push(
-      "APP_BASE_URL must use https in production, except loopback HTTP for local smoke tests.",
+      "APP_BASE_URL must use https for domain access; HTTP is only allowed for IP or loopback testing.",
     );
   } catch {
     errors.push("APP_BASE_URL must be a valid URL.");
   }
 }
 
-function isLoopbackHost(hostname: string) {
-  return ["localhost", "127.0.0.1", "::1"].includes(hostname.toLowerCase());
+function isAllowedHttpHost(hostname: string) {
+  const normalized = normalizeHostname(hostname);
+
+  return (
+    ["localhost", "127.0.0.1", "::1"].includes(normalized) ||
+    isIpv4Address(normalized) ||
+    isIpv6Address(normalized)
+  );
+}
+
+function normalizeHostname(hostname: string) {
+  return hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+}
+
+function isIpv4Address(hostname: string) {
+  const parts = hostname.split(".");
+
+  return (
+    parts.length === 4 &&
+    parts.every((part) => {
+      if (!/^\d{1,3}$/.test(part)) {
+        return false;
+      }
+
+      const value = Number(part);
+      return value >= 0 && value <= 255;
+    })
+  );
+}
+
+function isIpv6Address(hostname: string) {
+  return /^[0-9a-f:]+$/.test(hostname) && hostname.includes(":");
 }
 
 function validateInitialAdminPassword(
