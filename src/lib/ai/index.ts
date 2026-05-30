@@ -42,6 +42,7 @@ export type AiTripContext = {
 };
 
 export type AiGenerateRequest = {
+  includeDraftNotice?: boolean;
   maxOutputTokens?: number;
   systemPrompt: string;
   task: AiTaskDefinition;
@@ -60,6 +61,7 @@ export type AiProvider = {
 };
 
 export type AiProviderConfig = {
+  apiKey?: string;
   configured: boolean;
   model: string;
   provider: "mock" | "openai";
@@ -303,11 +305,19 @@ export function createAiProvider(
 ): AiProvider {
   const config = getAiProviderConfig(env);
 
+  return createConfiguredAiProvider(config, env);
+}
+
+export function createConfiguredAiProvider(
+  config: AiProviderConfig,
+  env: Record<string, string | undefined> = process.env,
+): AiProvider {
+
   if (config.provider === "mock") {
     return new MockTravelAiProvider();
   }
 
-  return new OpenAiResponsesProvider(env, config.model);
+  return new OpenAiResponsesProvider(env, config.model, config.apiKey);
 }
 
 export function buildSystemPrompt(): string {
@@ -337,9 +347,11 @@ export function buildUserPrompt({
 }): string {
   const task = getAiTaskDefinition(taskType);
   const tripFacts = [
-    `旅行名称：${trip.title}`,
-    trip.mainDestination ? `主要目的地：${trip.mainDestination}` : null,
-    trip.homeCity ? `出发城市：${trip.homeCity}` : null,
+    `旅行名称：${redactSensitivePrompt(trip.title)}`,
+    trip.mainDestination
+      ? `主要目的地：${redactSensitivePrompt(trip.mainDestination)}`
+      : null,
+    trip.homeCity ? `出发城市：${redactSensitivePrompt(trip.homeCity)}` : null,
     trip.startDate ? `开始日期：${formatDate(trip.startDate)}` : null,
     trip.endDate ? `结束日期：${formatDate(trip.endDate)}` : null,
     trip.budgetAmount
@@ -355,7 +367,9 @@ export function buildUserPrompt({
     "",
     "用户需求（已提示用户不要输入敏感信息）：",
     ...formatPromptFieldValues(fieldValues),
-    additionalInput?.trim() ? `补充说明：${additionalInput.trim()}` : null,
+    additionalInput?.trim()
+      ? `补充说明：${redactSensitivePrompt(additionalInput.trim())}`
+      : null,
     "",
     "请按以下结构输出：",
     ...task.outputSections.map((section) => `- ${section}`),
@@ -520,16 +534,16 @@ class MockTravelAiProvider implements AiProvider {
       )
       .join("\n\n");
 
-    return ensureAiDraftNotice(
-      [
-        `# ${request.task.label}`,
-        "",
-        sections,
-        "",
-        "## 需要人工核验的信息",
-        "- 营业时间、票价、预约要求、交通班次、签证和当地政策。",
-      ].join("\n"),
-    );
+    const text = [
+      `# ${request.task.label}`,
+      "",
+      sections,
+      "",
+      "## 需要人工核验的信息",
+      "- 营业时间、票价、预约要求、交通班次、签证和当地政策。",
+    ].join("\n");
+
+    return request.includeDraftNotice === false ? text : ensureAiDraftNotice(text);
   }
 }
 
@@ -539,14 +553,15 @@ class OpenAiResponsesProvider implements AiProvider {
   constructor(
     private readonly env: Record<string, string | undefined>,
     private readonly model: string,
+    private readonly apiKeyOverride?: string,
   ) {}
 
   isConfigured(): boolean {
-    return Boolean(this.env.OPENAI_API_KEY?.trim());
+    return Boolean(this.apiKeyOverride?.trim() || this.env.OPENAI_API_KEY?.trim());
   }
 
   async generateText(request: AiGenerateRequest): Promise<string> {
-    const apiKey = this.env.OPENAI_API_KEY?.trim();
+    const apiKey = this.apiKeyOverride?.trim() || this.env.OPENAI_API_KEY?.trim();
 
     if (!apiKey) {
       throw new Error("未配置 AI 服务");
@@ -577,7 +592,7 @@ class OpenAiResponsesProvider implements AiProvider {
       throw new Error("AI 服务未返回可用内容，请稍后重试。");
     }
 
-    return ensureAiDraftNotice(text);
+    return request.includeDraftNotice === false ? text : ensureAiDraftNotice(text);
   }
 }
 
@@ -619,7 +634,7 @@ function formatPromptFieldValues(fieldValues: AiPromptFieldValue[]): string[] {
   const formatted = fieldValues
     .map((field) => ({
       label: field.label.trim(),
-      value: field.value.trim(),
+      value: redactSensitivePrompt(field.value.trim()),
     }))
     .filter((field) => field.label && field.value)
     .map((field) => `- ${field.label}：${field.value}`);

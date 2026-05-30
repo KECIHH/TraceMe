@@ -63,6 +63,24 @@ describe("AI assistant helpers", () => {
     expect(userPrompt).toContain("需要人工核验的信息");
   });
 
+  it("redacts trip facts before building prompts", () => {
+    const userPrompt = buildUserPrompt({
+      additionalInput: "手机号 13812345678",
+      fieldValues: [{ label: "订单", value: "订单号 ABCD123456" }],
+      taskType: "travel-notes",
+      trip: {
+        mainDestination: "成都",
+        title: "旅行 手机号 13912345678",
+      },
+    });
+
+    expect(userPrompt).not.toContain("13812345678");
+    expect(userPrompt).not.toContain("13912345678");
+    expect(userPrompt).not.toContain("ABCD123456");
+    expect(userPrompt).toContain("[手机号已脱敏]");
+    expect(userPrompt).toContain("订单号：[编号已脱敏]");
+  });
+
   it("redacts sensitive prompt content before storage", () => {
     const redacted = redactSensitivePrompt(
       "手机号 13812345678，身份证 110105199001011234，订单号 ABCD123456。",

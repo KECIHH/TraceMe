@@ -143,6 +143,12 @@ enum AiPlanDraftStatus {
   failed
 }
 
+enum AiDraftStatus {
+  draft
+  applied
+  dismissed
+}
+
 model User {
   id           String    @id @default(cuid())
   username     String    @unique
@@ -194,6 +200,7 @@ model Trip {
   notes           Note[]
   aiConversations AiConversation[]
   aiPlanDrafts    AiPlanDraft[]
+  aiDrafts         AiDraft[]
   weatherSnapshots WeatherSnapshot[]
   currencyRates    CurrencyRate[]
   createdAt       DateTime          @default(now())
@@ -558,6 +565,24 @@ model AiPlanDraft {
   updatedAt    DateTime          @updatedAt
 
   @@index([tripId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AiDraft {
+  id          String        @id @default(cuid())
+  tripId      String
+  type        String
+  title       String
+  contentJson Json?
+  contentText String
+  status      AiDraftStatus @default(draft)
+  trip        Trip          @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([tripId])
+  @@index([type])
   @@index([status])
   @@index([createdAt])
 }

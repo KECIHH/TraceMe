@@ -20,6 +20,7 @@ const e2eEnv = {
   EXCHANGE_RATE_PROVIDER: "mock",
   OPENAI_API_KEY: "test-openai-key-not-real",
   DOCUMENT_ENCRYPTION_KEY: "test-document-encryption-key-32-bytes-minimum",
+  AI_CONFIG_ENCRYPTION_KEY: "test-ai-config-encryption-key-32-bytes",
   RESET_ADMIN_PASSWORD: "true",
   RESET_AI_ENABLED: "true",
   HOSTNAME: "127.0.0.1",

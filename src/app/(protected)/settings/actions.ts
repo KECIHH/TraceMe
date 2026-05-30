@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { writeAuditLog } from "@/lib/audit";
+import {
+  AI_ADVANCED_TASKS,
+  mergePromptTemplates,
+} from "@/lib/ai/advanced";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import {
   buildOtherSessionsWhere,
@@ -12,7 +16,17 @@ import {
 } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 import { validatePasswordChangeFields } from "@/lib/settings/password";
-import { setAiEnabledByUserSetting } from "@/server/services/ai/settings";
+import {
+  deleteAiProviderConfig,
+  isAiProviderName,
+  resolveAiProviderConfig,
+  saveAiProviderConfig,
+  testAiProviderConnection,
+} from "@/server/services/ai/provider-config";
+import {
+  setAiEnabledByUserSetting,
+  setAiPromptTemplates,
+} from "@/server/services/ai/settings";
 
 export async function setAiEnabledAction(formData: FormData) {
   const user = await requireUser();
@@ -26,6 +40,87 @@ export async function setAiEnabledAction(formData: FormData) {
   });
   revalidatePath("/settings");
   revalidatePath("/settings/ai");
+}
+
+export async function updateAiProviderConfigAction(formData: FormData) {
+  const user = await requireUser();
+  const providerValue = String(formData.get("provider") ?? "");
+
+  if (!isAiProviderName(providerValue)) {
+    redirectWithSettingsMessage("error", "请选择有效的 AI provider。");
+  }
+
+  try {
+    await saveAiProviderConfig({
+      apiKey: String(formData.get("apiKey") ?? ""),
+      model: String(formData.get("model") ?? ""),
+      provider: providerValue,
+    });
+  } catch (error) {
+    redirectWithSettingsMessage(
+      "error",
+      error instanceof Error ? error.message : "AI provider 配置保存失败。",
+    );
+  }
+
+  await writeAuditLog({
+    action: "ai_provider.updated",
+    entityType: "AppSetting",
+    metadata: { model: String(formData.get("model") ?? ""), provider: providerValue },
+    userId: user.id,
+  });
+  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
+  redirectWithSettingsMessage("message", "AI provider 配置已保存。");
+}
+
+export async function testAiProviderConfigAction() {
+  await requireUser();
+  const config = await resolveAiProviderConfig();
+  const result = await testAiProviderConnection(config);
+
+  if (!result.ok) {
+    redirectWithSettingsMessage("error", result.message);
+  }
+
+  revalidatePath("/settings/ai");
+  redirectWithSettingsMessage("message", "AI provider 连接测试通过。");
+}
+
+export async function deleteAiProviderConfigAction() {
+  const user = await requireUser();
+  await deleteAiProviderConfig();
+  await writeAuditLog({
+    action: "ai_provider.deleted",
+    entityType: "AppSetting",
+    metadata: { deleted: true },
+    userId: user.id,
+  });
+  revalidatePath("/settings");
+  revalidatePath("/settings/ai");
+  redirectWithSettingsMessage("message", "AI provider 配置已删除。");
+}
+
+export async function updateAiPromptTemplatesAction(formData: FormData) {
+  const user = await requireUser();
+  const templates = mergePromptTemplates(
+    Object.fromEntries(
+      AI_ADVANCED_TASKS.map((task) => [
+        task.id,
+        String(formData.get(`template-${task.id}`) ?? ""),
+      ]),
+    ),
+  );
+
+  await setAiPromptTemplates(templates);
+  await writeAuditLog({
+    action: "ai_prompt_templates.updated",
+    entityType: "AppSetting",
+    metadata: { templateCount: AI_ADVANCED_TASKS.length },
+    userId: user.id,
+  });
+  revalidatePath("/settings/ai");
+  redirectWithSettingsMessage("message", "Prompt 模板已保存。");
 }
 
 export async function updateProfileAction(formData: FormData) {
@@ -114,4 +209,8 @@ export async function refreshSystemStatusAction() {
   redirect(
     `/settings/system?message=${encodeURIComponent("系统统计已重新计算。")}`,
   );
+}
+
+function redirectWithSettingsMessage(key: "error" | "message", message: string): never {
+  redirect(`/settings/ai?${key}=${encodeURIComponent(message)}`);
 }
