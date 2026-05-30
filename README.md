@@ -83,7 +83,7 @@ irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-wind
 脚本会完成：
 
 - clone / pull 项目。
-- 生成 `.env` 和随机管理员密码。
+- 生成 `.env` 和随机管理员密码；如果已有 `.env`，会用本次传入的 `APP_BASE_URL` 更新旧值。
 - 拉取预构建镜像，或在 `TRACEME_USE_LOCAL_BUILD=true` 时本地构建。
 - 启动 `travel-planner` 容器。
 - 执行 `docker compose run --rm seed-admin` 创建管理员。
@@ -100,6 +100,13 @@ irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-wind
 - `TRACEME_USE_LOCAL_BUILD=true`: 不拉预构建镜像，改为服务器本地构建。
 - `INITIAL_ADMIN_USERNAME`: 初始管理员用户名，默认 `admin`。
 - `SEED_EXAMPLE_TRIP=false`: 跳过虚构示例旅行。
+
+如果看到 `APP_BASE_URL must use https in production`，通常是旧 `.env` 里仍然保存着 `http://服务器IP:端口`。重新运行一键部署并显式传入 HTTPS 域名即可自动修正：
+
+```bash
+cd ~/traceme
+APP_BASE_URL=https://travel.example.com bash scripts/bootstrap-linux.sh
+```
 
 ## 手动 Docker 部署
 

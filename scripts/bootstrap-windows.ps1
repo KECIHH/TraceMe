@@ -89,6 +89,74 @@ function Ensure-EnvValue {
   Add-Content -LiteralPath $Path -Encoding UTF8 -Value "$Key=`"$Value`""
 }
 
+function Set-EnvValue {
+  param(
+    [string]$Path,
+    [string]$Key,
+    [string]$Value
+  )
+
+  $lines = @()
+  if (Test-Path -LiteralPath $Path) {
+    $lines = @(Get-Content -LiteralPath $Path -Encoding UTF8)
+  }
+
+  $found = $false
+  $updated = $lines | ForEach-Object {
+    if ($_ -match "^$([Regex]::Escape($Key))=") {
+      $found = $true
+      "$Key=`"$Value`""
+    } else {
+      $_
+    }
+  }
+
+  if (-not $found) {
+    $updated += "$Key=`"$Value`""
+  }
+
+  $updated | Set-Content -LiteralPath $Path -Encoding UTF8
+}
+
+function Test-AppBaseUrl {
+  param([string]$Value)
+
+  if (-not $Value) {
+    return $false
+  }
+
+  return $Value.StartsWith("https://") -or
+    $Value.StartsWith("http://localhost:") -or
+    $Value.StartsWith("http://127.0.0.1:") -or
+    $Value.StartsWith("http://[::1]:")
+}
+
+function Ensure-AppBaseUrlReady {
+  param([string]$Path)
+
+  if ($AppBaseUrl) {
+    Set-EnvValue -Path $Path -Key "APP_BASE_URL" -Value $AppBaseUrl
+    Write-Host "Updated APP_BASE_URL in $Path."
+    return
+  }
+
+  $savedAppBaseUrl = Read-EnvValue -Path $Path -Key "APP_BASE_URL"
+  if (Test-AppBaseUrl -Value $savedAppBaseUrl) {
+    $script:AppBaseUrl = $savedAppBaseUrl
+    return
+  }
+
+  throw @"
+Invalid APP_BASE_URL in $InstallDir\.env: $savedAppBaseUrl
+
+Production domain access must use HTTPS. Re-run with your HTTPS domain, for example:
+  `$env:APP_BASE_URL='https://travel.example.com'; .\scripts\bootstrap-windows.ps1
+
+For a local smoke test only, use:
+  `$env:APP_BASE_URL='http://127.0.0.1:$TraceMePort'; .\scripts\bootstrap-windows.ps1
+"@
+}
+
 function Start-TraceMeContainer {
   for ($attempt = 1; $attempt -le $BuildRetries; $attempt++) {
     Write-Host "Docker build/start attempt $attempt/$BuildRetries ..."
@@ -226,6 +294,7 @@ if (-not (Test-Path -LiteralPath ".env")) {
   Write-Host "Using existing .env."
 }
 
+Ensure-AppBaseUrlReady -Path ".env"
 Ensure-EnvValue -Path ".env" -Key "NPM_CONFIG_REGISTRY" -Value $NpmConfigRegistry
 Ensure-EnvValue -Path ".env" -Key "ALPINE_REPOSITORY_MIRROR" -Value $AlpineRepositoryMirror
 Ensure-EnvValue -Path ".env" -Key "TRACEME_IMAGE" -Value $TraceMeImage

@@ -80,6 +80,8 @@ describe("private deployment configuration", () => {
     expect(linuxBootstrap).not.toContain("timeout \"$BUILD_ATTEMPT_TIMEOUT\" docker_compose");
     expect(linuxBootstrap).toContain("docker_compose run --rm seed-admin");
     expect(linuxBootstrap).toContain("TRACEME_BIND:-127.0.0.1");
+    expect(linuxBootstrap).toContain("Updated APP_BASE_URL in $env_file.");
+    expect(linuxBootstrap).toContain("Invalid APP_BASE_URL in $INSTALL_DIR/.env");
 
     expect(windowsBootstrap).toContain("https://github.com/KECIHH/TraceMe.git");
     expect(windowsBootstrap).toContain("ghcr.io/kecihh/traceme:main");
@@ -87,6 +89,8 @@ describe("private deployment configuration", () => {
     expect(windowsBootstrap).toContain("docker compose up -d --build");
     expect(windowsBootstrap).toContain("docker compose run --rm seed-admin");
     expect(windowsBootstrap).toContain('"127.0.0.1"');
+    expect(windowsBootstrap).toContain("Updated APP_BASE_URL in $Path.");
+    expect(windowsBootstrap).toContain("Invalid APP_BASE_URL in $InstallDir\\.env");
   });
 });
 

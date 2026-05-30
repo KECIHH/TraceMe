@@ -28,6 +28,8 @@ irm https://raw.githubusercontent.com/KECIHH/TraceMe/main/scripts/bootstrap-wind
 
 脚本会完成 clone/pull、生成 `.env`、拉取预构建镜像或本地构建、启动容器、执行 `docker compose run --rm seed-admin`、等待 `/api/health` 正常。
 
+如果服务器上已有旧 `.env`，再次运行脚本并传入 `APP_BASE_URL=https://travel.example.com` 会自动更新 `.env` 中的旧 `APP_BASE_URL`。如果旧值仍是 `http://服务器IP:端口` 且没有传入新值，脚本会在启动容器前提示修正，避免容器反复报 `APP_BASE_URL must use https in production`。
+
 常用参数：
 
 - `TRACEME_REPO`: Git 仓库地址，默认 `https://github.com/KECIHH/TraceMe.git`。

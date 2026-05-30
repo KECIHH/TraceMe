@@ -208,6 +208,62 @@ ensure_env_value() {
   printf '%s="%s"\n' "$key" "$value" >>"$env_file"
 }
 
+set_env_value() {
+  local key="$1"
+  local value="$2"
+  local env_file="$3"
+
+  if grep -q "^${key}=" "$env_file"; then
+    local escaped_value
+    escaped_value="$(printf '%s' "$value" | sed 's/[&|\\]/\\&/g')"
+    sed -i "s|^${key}=.*|${key}=\"${escaped_value}\"|" "$env_file"
+    return
+  fi
+
+  printf '%s="%s"\n' "$key" "$value" >>"$env_file"
+}
+
+is_valid_app_base_url() {
+  local value="$1"
+
+  case "$value" in
+    https://*) return 0 ;;
+    http://localhost:*|http://127.0.0.1:*|http://[::1]:*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+ensure_app_base_url_ready() {
+  local env_file="$1"
+  local saved_app_base_url
+
+  if [ -n "$APP_BASE_URL" ]; then
+    set_env_value "APP_BASE_URL" "$APP_BASE_URL" "$env_file"
+    echo "Updated APP_BASE_URL in $env_file."
+    return
+  fi
+
+  saved_app_base_url="$(read_env_value APP_BASE_URL "$env_file" || true)"
+  if is_valid_app_base_url "$saved_app_base_url"; then
+    APP_BASE_URL="$saved_app_base_url"
+    return
+  fi
+
+  cat >&2 <<EOF_APP_BASE_URL
+Invalid APP_BASE_URL in $INSTALL_DIR/.env: ${saved_app_base_url:-<empty>}
+
+Production domain access must use HTTPS. Re-run with your HTTPS domain, for example:
+
+  APP_BASE_URL=https://travel.example.com bash scripts/bootstrap-linux.sh
+
+For a local smoke test only, use:
+
+  APP_BASE_URL=http://127.0.0.1:${TRACEME_PORT} bash scripts/bootstrap-linux.sh
+
+EOF_APP_BASE_URL
+  exit 1
+}
+
 write_env_file() {
   local env_file="$1"
   local session_secret="$2"
@@ -273,6 +329,7 @@ else
   echo "Using existing .env."
 fi
 
+ensure_app_base_url_ready ".env"
 ensure_env_value "NPM_CONFIG_REGISTRY" "$NPM_CONFIG_REGISTRY" ".env"
 ensure_env_value "ALPINE_REPOSITORY_MIRROR" "$ALPINE_REPOSITORY_MIRROR" ".env"
 ensure_env_value "BUILD_NODE_OPTIONS" "$BUILD_NODE_OPTIONS" ".env"
