@@ -103,7 +103,7 @@ node scripts/start-production.mjs
 4. 运行 `npx prisma migrate deploy`。
 5. 启动 Next.js standalone server。
 
-运行镜像中已经复制 Prisma CLI 运行所需文件，包括 `node_modules/prisma`、`node_modules/@prisma`、`node_modules/.prisma` 和 `.bin/prisma` symlink。若部署日志出现 `prisma_schema_build_bg.wasm` 缺失，说明服务器仍在运行旧镜像或旧构建，请重新拉取/构建镜像并重启容器。
+运行镜像会复制裁剪后的完整生产 `node_modules`，确保 `prisma migrate deploy` 所需的 Prisma CLI、engine、wasm 文件和 transitive dependencies 都在容器内。若部署日志出现 `prisma_schema_build_bg.wasm` 缺失或 `Cannot find module 'effect'`，说明服务器仍在运行旧镜像/旧构建，或镜像里只复制了部分 Prisma 目录；请重新拉取或构建镜像并重启容器。
 
 ## Docker Compose 默认行为
 

@@ -56,11 +56,7 @@ COPY --from=builder /app/scripts/ensure-production-secrets.mjs ./scripts/ensure-
 COPY --from=builder /app/scripts/seed-admin.mjs ./scripts/seed-admin.mjs
 COPY --from=builder /app/scripts/start-production.mjs ./scripts/start-production.mjs
 COPY --from=builder /app/scripts/validate-production-env.mjs ./scripts/validate-production-env.mjs
-COPY --from=prod-deps /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=prod-deps /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=prod-deps /app/node_modules/dotenv ./node_modules/dotenv
-COPY --from=prod-deps /app/node_modules/prisma ./node_modules/prisma
-RUN ln -s ../prisma/build/index.js ./node_modules/.bin/prisma
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 
 USER nextjs

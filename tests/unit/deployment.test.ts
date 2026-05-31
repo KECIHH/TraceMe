@@ -71,11 +71,16 @@ describe("private deployment configuration", () => {
     expect(dockerfile).toContain("EXPOSE 3000");
     expect(dockerfile).toContain("ARG BUILD_NODE_OPTIONS");
     expect(dockerfile).toContain("npm prune --omit=dev");
+    expect(dockerfile).toContain("COPY --from=prod-deps /app/node_modules ./node_modules");
     expect(dockerfile).toContain("scripts/ensure-production-secrets.mjs");
     expect(dockerfile).toContain("scripts/validate-production-env.mjs");
     expect(dockerfile).toContain("scripts/start-production.mjs");
     expect(dockerfile).toContain('CMD ["node", "scripts/start-production.mjs"]');
     expect(dockerfile).not.toContain("COPY --from=builder /app/scripts ./scripts");
+    expect(dockerfile).not.toContain(
+      "COPY --from=prod-deps /app/node_modules/prisma ./node_modules/prisma",
+    );
+    expect(dockerfile).not.toContain("ln -s ../prisma/build/index.js");
   });
 
   it("includes one-command bootstrap scripts for server and Windows installs", () => {
