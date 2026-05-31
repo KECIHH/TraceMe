@@ -15,6 +15,7 @@ import { dateKey, getNearestItineraryDay, getTodayDateMatch } from "@/lib/itiner
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { getTripAccessForUser } from "@/lib/collaboration";
+import { summarizeTodayForOffline } from "@/lib/today";
 
 type RouteContext = {
   params: Promise<{ tripId: string }>;
@@ -51,7 +52,9 @@ export async function GET(_request: Request, context: RouteContext) {
             ],
             select: {
               endTime: true,
+              id: true,
               place: { select: { name: true } },
+              priority: true,
               startTime: true,
               status: true,
               title: true,
@@ -61,6 +64,17 @@ export async function GET(_request: Request, context: RouteContext) {
           },
         },
         orderBy: { date: "asc" },
+      },
+      expenses: {
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          amount: true,
+          category: true,
+          currency: true,
+          paidAt: true,
+          title: true,
+        },
+        take: 80,
       },
       notes: {
         orderBy: { updatedAt: "desc" },
@@ -106,6 +120,17 @@ export async function GET(_request: Request, context: RouteContext) {
     ? trip.itineraryDays.find((day) => day.id === today.id) ?? null
     : null;
   const lodging = trip.places.filter((place) => place.type === "HOTEL").slice(0, 10);
+  const todayExpenses = trip.expenses.filter((expense) =>
+    expense.paidAt && fullToday
+      ? dateKey(expense.paidAt) === dateKey(fullToday.date)
+      : false,
+  );
+  const todayOffline = summarizeTodayForOffline({
+    checklist: trip.checklistItems.map((item) => ({ ...item, dueDate: null })),
+    day: fullToday,
+    expenses: todayExpenses,
+    now,
+  });
   const emergencyNotes = trip.notes
     .filter((note) => {
       const tags = Array.isArray(note.tags) ? note.tags.join(" ") : "";
@@ -119,6 +144,15 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const summary = attachOfflineCacheMetadata(
     stripSensitiveFields({
+      budget: {
+        baseCurrency: sanitizeOfflineText(trip.baseCurrency),
+        spentToday: todayOffline.spentToday.map((expense) => ({
+          ...expense,
+          category: sanitizeOfflineText(expense.category),
+          title: sanitizeOfflineText(expense.title),
+        })),
+        totalBudget: trip.budgetAmount?.toString() ?? null,
+      },
       checklist: trip.checklistItems.map((item) => ({
         ...item,
         category: sanitizeOfflineText(item.category),
@@ -146,6 +180,15 @@ export async function GET(_request: Request, context: RouteContext) {
             transportToNext: sanitizeOptionalOfflineText(item.transportToNext),
             type: item.type,
           })) ?? [],
+        nextStep: todayOffline.nextStep
+          ? {
+              ...todayOffline.nextStep,
+              title: sanitizeOfflineText(todayOffline.nextStep.title),
+              transportToNext: sanitizeOptionalOfflineText(
+                todayOffline.nextStep.transportToNext,
+              ),
+            }
+          : null,
         theme: sanitizeOptionalOfflineText(fullToday?.theme),
         weatherSummary: sanitizeOptionalOfflineText(fullToday?.weatherSummary),
       },

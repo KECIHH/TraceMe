@@ -1,3 +1,4 @@
+import type { ItineraryItemStatus } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -7,6 +8,8 @@ import {
   secondaryButtonClassName,
   StatusPill,
 } from "@/components/ui";
+import { BUDGET_CATEGORIES, calculateConvertedSpent, formatMoney } from "@/lib/budget";
+import { requireTripAccess } from "@/lib/collaboration";
 import {
   formatDisplayDate,
   formatDisplayTime,
@@ -14,22 +17,25 @@ import {
 } from "@/lib/display-format";
 import { formatWeatherSnapshot, toDateKey } from "@/lib/external/weather";
 import {
-  analyzeItineraryDay,
   formatDateTitle,
   formatTimeRange,
   getItineraryItemTypeLabel,
-  getItineraryPriorityLabel,
   getItineraryStatusLabel,
-  getNearestItineraryDay,
-  getNextItineraryItem,
-  getTodayDateMatch,
   isDateInRange,
 } from "@/lib/itinerary";
 import { prisma } from "@/lib/prisma";
+import {
+  getNextTodayStep,
+  resolveTodayExecutionDay,
+  summarizeTodayForOffline,
+} from "@/lib/today";
 
-import { Notice, TripModuleNav } from "../module-nav";
 import { refreshWeatherAction } from "../external-actions";
-import { updateItineraryItemStatusAction } from "../itinerary/actions";
+import { Notice, TripModuleNav } from "../module-nav";
+import { TodayAiAdjustmentForm } from "./today-ai-adjustment-form";
+import { TodayNetworkBadge } from "./today-network-badge";
+import { TodayQuickRecordForm } from "./today-quick-record-form";
+import { TodayStatusButton } from "./today-status-button";
 
 type TodayPageProps = {
   params: Promise<{ id: string }>;
@@ -42,13 +48,32 @@ export default async function TodayPage({
 }: TodayPageProps) {
   const { id } = await params;
   const queryParams = (await searchParams) ?? {};
+  const { access } = await requireTripAccess(id, "read");
+  const canEdit = access.canEdit;
+
   const now = new Date();
   const trip = await prisma.trip.findUnique({
     include: {
+      aiDrafts: {
+        orderBy: { createdAt: "desc" },
+        take: 3,
+        where: { status: "draft", type: "today-adjustment" },
+      },
+      categoryBudgets: true,
+      checklistItems: {
+        orderBy: [{ dueDate: "asc" }, { importance: "desc" }, { createdAt: "asc" }],
+        take: 80,
+      },
+      destinations: { orderBy: [{ arrivalDate: "asc" }, { name: "asc" }] },
       documents: {
         orderBy: { createdAt: "desc" },
         select: { id: true, title: true, type: true },
         take: 3,
+      },
+      expenses: {
+        include: { relatedPlace: { select: { name: true } } },
+        orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }],
+        take: 60,
       },
       itineraryDays: {
         include: {
@@ -66,9 +91,13 @@ export default async function TodayPage({
         orderBy: { date: "asc" },
       },
       places: {
-        orderBy: { name: "asc" },
-        select: { id: true, name: true, address: true, type: true },
-        where: { type: "HOTEL" },
+        orderBy: [{ type: "asc" }, { updatedAt: "desc" }, { name: "asc" }],
+        select: { address: true, id: true, name: true, phone: true, type: true },
+        take: 80,
+      },
+      transports: {
+        orderBy: [{ departTime: "asc" }, { createdAt: "asc" }],
+        take: 40,
       },
       weatherSnapshots: {
         orderBy: { fetchedAt: "desc" },
@@ -81,209 +110,237 @@ export default async function TodayPage({
     notFound();
   }
 
-  const exactToday = getTodayDateMatch(now, trip.itineraryDays);
-  const nearestDay = getNearestItineraryDay(now, trip.itineraryDays);
-  const displayDay = exactToday ?? nearestDay;
-  const fullDisplayDay = displayDay
-    ? trip.itineraryDays.find((day) => day.id === displayDay.id) ?? null
-    : null;
+  const { day: todayDay, isExactToday } = resolveTodayExecutionDay(
+    now,
+    trip.itineraryDays,
+  );
   const inTripRange = isDateInRange(now, trip.startDate, trip.endDate);
-  const alerts = fullDisplayDay ? analyzeItineraryDay(fullDisplayDay.items) : [];
-  const nextItem = fullDisplayDay
-    ? getNextItineraryItem(now, fullDisplayDay.items) ??
-      fullDisplayDay.items.find((item) => item.status === "PLANNED") ??
-      null
-    : null;
-  const lodgingItems =
-    fullDisplayDay?.items.filter((item) => item.type === "LODGING") ?? [];
-  const weatherSnapshot = fullDisplayDay
+  const nextStep = todayDay ? getNextTodayStep(now, todayDay.items) : null;
+  const todayKey = todayDay ? toDateKey(todayDay.date) : toDateKey(now);
+  const weatherSnapshot = todayDay
     ? trip.weatherSnapshots.find(
-        (snapshot) => toDateKey(snapshot.date) === toDateKey(fullDisplayDay.date),
+        (snapshot) => toDateKey(snapshot.date) === toDateKey(todayDay.date),
       ) ?? null
     : null;
+  const currentDestinations = trip.destinations.filter((destination) =>
+    isDateCovered(todayDay?.date ?? now, destination.arrivalDate, destination.departureDate),
+  );
+  const todayTransports = trip.transports.filter((transport) =>
+    [transport.departTime, transport.arriveTime].some(
+      (date) => date && toDateKey(date) === todayKey,
+    ),
+  );
+  const lodging = trip.places.filter((place) => place.type === "HOTEL").slice(0, 4);
+  const dueChecklist = trip.checklistItems
+    .filter((item) => item.status === "TODO")
+    .filter((item) => !item.dueDate || toDateKey(item.dueDate) <= todayKey)
+    .slice(0, 6);
+  const todayExpenses = trip.expenses.filter((expense) =>
+    expense.paidAt ? toDateKey(expense.paidAt) === todayKey : false,
+  );
+  const spentToday = calculateConvertedSpent(todayExpenses, trip.baseCurrency);
+  const offlinePreview = summarizeTodayForOffline({
+    checklist: trip.checklistItems,
+    day: todayDay,
+    expenses: todayExpenses,
+    now,
+  });
   const refreshWeather = refreshWeatherAction.bind(null, trip.id);
 
   return (
-    <section className="mx-auto max-w-3xl space-y-5">
+    <section className="mx-auto max-w-3xl space-y-5 pb-24 sm:pb-6">
       <TripModuleNav active="today" tripId={trip.id} tripTitle={trip.title} />
       <Notice error={queryParams.error} message={queryParams.message} />
 
-      <div className="rounded-lg border border-[#b8d8ca] bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-[#2f6f73]">今日模式</p>
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">{trip.title}</h1>
-            <p className="mt-2 text-sm leading-6 text-[#5d6972]">
-              {formatDisplayDate(now)} · 当前时间 {formatDisplayTime(now)}
-            </p>
-          </div>
-          <Link
-            className={secondaryButtonClassName}
-            href={`/trips/${trip.id}/itinerary`}
-          >
-            返回行程日历
-          </Link>
+      <div className="rounded-lg border border-[#b8d8ca] bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[#2f6f73]">今日执行</p>
+          <TodayNetworkBadge />
         </div>
+        <h1 className="mt-2 text-3xl font-semibold">{trip.title}</h1>
+        <p className="mt-2 text-sm leading-6 text-[#5d6972]">
+          {formatDisplayDate(now)} / {formatDisplayTime(now)}
+        </p>
       </div>
 
-      {!fullDisplayDay ? (
+      {!todayDay ? (
         <EmptyState
           actionHref={`/trips/${trip.id}/itinerary`}
           actionLabel="生成行程日期"
-          description="先在行程日历里生成日期并添加当天安排，之后这里会自动显示最接近今天的一天。"
+          description="先在行程日历里生成日期并添加当天安排，今日执行页会自动读取。"
           title="还没有可查看的今日行程"
         />
       ) : (
         <>
-          <div className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm">
+          <section className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm sm:p-5">
             <p className="text-sm text-[#66737b]">
-              {exactToday
-                ? "今天在旅行日期中"
+              {isExactToday
+                ? "今天"
                 : inTripRange
-                  ? "今天在旅行日期内，但还没有生成今天的行程日期"
-                  : "当前不在旅行日期范围内，显示最近一天"}
+                  ? "旅行日期内最近一天"
+                  : "最近行程日"}
             </p>
-            <h2 className="mt-2 text-2xl font-semibold">
-              {formatDateTitle(fullDisplayDay.date)}
+            <h2 className="mt-1 text-2xl font-semibold">
+              {formatDateTitle(todayDay.date)}
             </h2>
-            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-              <TodayInfo label="今日城市" value={fullDisplayDay.city} />
-              <TodayInfo label="主题" value={fullDisplayDay.theme} />
-              <TodayInfo
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <InfoTile label="目的地" value={formatList(currentDestinations.map((item) => item.name)) || trip.mainDestination} />
+              <InfoTile label="城市" value={todayDay.city} />
+              <InfoTile
                 label="天气"
                 value={
                   weatherSnapshot
                     ? formatWeatherSnapshot(weatherSnapshot)
-                    : fullDisplayDay.weatherSummary
+                    : todayDay.weatherSummary
                 }
               />
-            </dl>
-            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-[#7a858c]">
-                外部数据仅供参考，请人工核验。
-              </p>
-              <form action={refreshWeather}>
-                <input name="returnTo" type="hidden" value={`/trips/${trip.id}/today`} />
-                <input name="forceRefresh" type="hidden" value="true" />
-                <SubmitButton
-                  className={secondaryButtonClassName}
-                  data-testid="today-refresh-weather"
-                  pendingLabel="刷新中..."
-                >
-                  手动刷新天气
-                </SubmitButton>
-              </form>
             </div>
-            {alerts.length > 0 ? (
-              <p className="mt-3 rounded-md border border-[#f0d39b] bg-[#fff9e8] px-3 py-2 text-sm text-[#73530f]">
-                今天有 {alerts.length} 条提醒，请留意节奏。
-              </p>
-            ) : null}
-          </div>
+            <form action={refreshWeather} className="mt-4">
+              <input name="returnTo" type="hidden" value={`/trips/${trip.id}/today`} />
+              <input name="forceRefresh" type="hidden" value="true" />
+              <SubmitButton
+                className={secondaryButtonClassName}
+                data-testid="today-refresh-weather"
+                pendingLabel="刷新中..."
+              >
+                刷新天气
+              </SubmitButton>
+            </form>
+            <p className="mt-3 text-xs text-[#7a858c]">
+              外部数据仅供参考，请人工核验。
+            </p>
+          </section>
 
-          <section className="rounded-lg border border-[#2f6f73] bg-[#fbfffd] p-5 shadow-sm">
-            <p className="text-sm font-semibold text-[#2f6f73]">下一项行程</p>
-            {nextItem ? (
-              <div className="mt-3">
+          <section className="rounded-lg border border-[#2f6f73] bg-[#fbfffd] p-4 shadow-sm sm:p-5">
+            <p className="text-sm font-semibold text-[#2f6f73]">下一步去哪</p>
+            <p className="sr-only">下一项行程</p>
+            {nextStep ? (
+              <div className="mt-3" data-testid="today-next-step">
                 <p className="text-sm font-semibold text-[#172026]">
-                  {formatTimeRange(nextItem.startTime, nextItem.endTime)}
+                  {formatTimeRange(nextStep.item.startTime, nextStep.item.endTime)}
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold">{nextItem.title}</h2>
+                <h2 className="mt-2 text-2xl font-semibold">{nextStep.item.title}</h2>
                 <p className="mt-2 text-sm text-[#5d6972]">
-                  {getItineraryItemTypeLabel(nextItem.type)}
-                  {nextItem.place ? ` · ${nextItem.place.name}` : ""}
+                  {getItineraryItemTypeLabel(nextStep.item.type)}
+                  {nextStep.item.place ? ` / ${nextStep.item.place.name}` : ""}
+                  {nextStep.reason === "delayed" ? " / 已延后，优先确认" : ""}
                 </p>
-                <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
-                  <StatusButton
-                    itemId={nextItem.id}
-                    label="一键标记完成"
-                    status="DONE"
-                    tripId={trip.id}
-                  />
-                  <StatusButton
-                    itemId={nextItem.id}
-                    label="一键标记跳过"
-                    status="SKIPPED"
-                    tripId={trip.id}
-                  />
-                </div>
+                {nextStep.item.transportToNext ? (
+                  <p className="mt-3 rounded-md bg-white px-3 py-2 text-sm text-[#34434c]">
+                    交通：{nextStep.item.transportToNext}
+                  </p>
+                ) : null}
+                {canEdit ? (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <TodayStatusButton
+                      itemId={nextStep.item.id}
+                      label="完成"
+                      status="DONE"
+                      testId="today-complete-item"
+                      tripId={trip.id}
+                    />
+                    <TodayStatusButton
+                      itemId={nextStep.item.id}
+                      label="跳过"
+                      status="SKIPPED"
+                      testId="today-skip-item"
+                      tripId={trip.id}
+                    />
+                    <TodayStatusButton
+                      itemId={nextStep.item.id}
+                      label="延后"
+                      status="DELAYED"
+                      testId="today-delay-item"
+                      tripId={trip.id}
+                    />
+                  </div>
+                ) : (
+                  <ReadOnlyNotice />
+                )}
               </div>
             ) : (
               <p className="mt-3 rounded-md bg-white px-4 py-5 text-sm text-[#5d6972]">
-                今天没有待处理的下一项，可以慢慢走，或去行程日历补充安排。
+                今天没有待执行行程。
               </p>
             )}
           </section>
 
+          <section className="grid gap-3 sm:grid-cols-2">
+            <InfoTile
+              label="今日交通"
+              value={
+                todayTransports[0]
+                  ? `${todayTransports[0].fromName} → ${todayTransports[0].toName}`
+                  : null
+              }
+            />
+            <InfoTile
+              label="住宿"
+              value={lodging[0] ? [lodging[0].name, lodging[0].address].filter(Boolean).join(" / ") : null}
+            />
+            <InfoTile
+              label="清单"
+              value={
+                dueChecklist.length > 0
+                  ? `${dueChecklist.length} 项待处理`
+                  : "暂无到期清单"
+              }
+            />
+            <InfoTile
+              label="今日支出"
+              value={formatMoney(spentToday, trip.baseCurrency)}
+            />
+          </section>
+
           <section className="space-y-3">
             <h2 className="text-xl font-semibold">今日全部行程</h2>
-            {fullDisplayDay.items.length === 0 ? (
+            {todayDay.items.length === 0 ? (
               <EmptyState
                 actionHref={`/trips/${trip.id}/itinerary`}
                 actionLabel="添加今日行程"
-                description="今天暂时没有行程项，可以添加交通、餐饮、景点或住宿安排。"
+                description="今天还没有行程项。"
                 title="暂无今日行程"
               />
             ) : (
-              fullDisplayDay.items.map((item) => (
+              todayDay.items.map((item) => (
                 <article
                   className={[
                     "rounded-lg border p-4 shadow-sm",
                     item.status === "DONE"
-                      ? "border-[#d8d2c6] bg-white opacity-65"
+                      ? "border-[#d8d2c6] bg-white opacity-70"
                       : item.status === "SKIPPED"
                         ? "border-[#f0d39b] bg-[#fff9e8]"
-                        : "border-[#d8d2c6] bg-white",
+                        : item.status === "DELAYED"
+                          ? "border-[#b8d8ca] bg-[#f0faf5]"
+                          : "border-[#d8d2c6] bg-white",
                   ].join(" ")}
                   data-testid="today-item-card"
                   key={item.id}
                 >
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <div className="shrink-0 text-sm font-semibold text-[#172026] sm:w-24">
-                      {formatTimeRange(item.startTime, item.endTime)}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#172026]">
+                        {formatTimeRange(item.startTime, item.endTime)}
+                      </p>
+                      <h3 className="mt-1 break-words text-lg font-semibold">
+                        {item.title}
+                      </h3>
+                      <p className="mt-1 text-sm text-[#5d6972]">
+                        {item.place?.name ?? getItineraryItemTypeLabel(item.type)}
+                      </p>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap gap-2">
-                        <StatusPill>
-                          {getItineraryItemTypeLabel(item.type)}
-                        </StatusPill>
-                        <StatusPill tone="warning">
-                          {getItineraryPriorityLabel(item.priority)}
-                        </StatusPill>
-                        <StatusPill
-                          tone={
-                            item.status === "DONE"
-                              ? "success"
-                              : item.status === "SKIPPED"
-                                ? "warning"
-                                : "muted"
-                          }
-                        >
-                          {getItineraryStatusLabel(item.status)}
-                        </StatusPill>
-                      </div>
-                      <h3 className="mt-2 font-semibold">{item.title}</h3>
-                      {item.place ? (
-                        <p className="mt-1 text-sm text-[#5d6972]">
-                          {item.place.name}
-                        </p>
-                      ) : null}
-                      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
-                        <StatusButton
-                          itemId={item.id}
-                          label="一键标记完成"
-                          status="DONE"
-                          tripId={trip.id}
-                        />
-                        <StatusButton
-                          itemId={item.id}
-                          label="一键标记跳过"
-                          status="SKIPPED"
-                          tripId={trip.id}
-                        />
-                      </div>
-                    </div>
+                    <StatusPill tone={statusTone(item.status)}>
+                      {getItineraryStatusLabel(item.status)}
+                    </StatusPill>
                   </div>
+                  {canEdit ? (
+                    <div className="mt-3 grid grid-cols-4 gap-2">
+                      <TodayStatusButton itemId={item.id} label="完成" status="DONE" tripId={trip.id} />
+                      <TodayStatusButton itemId={item.id} label="跳过" status="SKIPPED" tripId={trip.id} />
+                      <TodayStatusButton itemId={item.id} label="延后" status="DELAYED" tripId={trip.id} />
+                      <TodayStatusButton itemId={item.id} label="恢复" status="PLANNED" tripId={trip.id} />
+                    </div>
+                  ) : null}
                 </article>
               ))
             )}
@@ -291,11 +348,68 @@ export default async function TodayPage({
         </>
       )}
 
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm sm:p-5">
+        <h2 className="text-xl font-semibold">快速记录</h2>
+        {canEdit ? (
+          <TodayQuickRecordForm
+            baseCurrency={trip.baseCurrency}
+            categories={BUDGET_CATEGORIES}
+            tripId={trip.id}
+          />
+        ) : (
+          <ReadOnlyNotice />
+        )}
+      </section>
+
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">AI 调整草稿</h2>
+            <p className="mt-1 text-sm text-[#5d6972]">
+              建议进入草稿，不直接覆盖原计划。
+            </p>
+          </div>
+          <Link className={secondaryButtonClassName} href={`/trips/${trip.id}/ai`}>
+            查看草稿
+          </Link>
+        </div>
+        {canEdit ? <TodayAiAdjustmentForm tripId={trip.id} /> : <ReadOnlyNotice />}
+        <div className="mt-4 space-y-3">
+          {trip.aiDrafts.length === 0 ? (
+            <p className="rounded-md border border-dashed border-[#b8c8c4] p-4 text-sm text-[#5d6972]">
+              暂无今日调整草稿。
+            </p>
+          ) : (
+            trip.aiDrafts.map((draft) => (
+              <article
+                className="rounded-md border border-[#e0d9cc] bg-[#fbfaf7] p-4"
+                data-testid="today-ai-draft-card"
+                key={draft.id}
+              >
+                <h3 className="font-semibold">{draft.title}</h3>
+                <p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-[#5d6972]">
+                  {draft.contentText}
+                </p>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm sm:p-5">
+        <h2 className="text-xl font-semibold">离线摘要</h2>
+        <div className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+          <InfoTile label="下一步" value={offlinePreview.nextStep?.title ?? null} />
+          <InfoTile label="待办清单" value={`${offlinePreview.checklistOpen.length} 项`} />
+          <InfoTile label="今日支出" value={`${offlinePreview.spentToday.length} 笔`} />
+          <InfoTile label="缓存入口" value="点击顶部“刷新离线缓存”" />
+        </div>
+      </section>
+
       <section className="grid gap-3 sm:grid-cols-2">
         <QuickLink
           description={
-            lodgingItems[0]?.title ??
-            trip.places[0]?.name ??
+            lodging[0]?.name ??
             "查看住宿清单和酒店地址"
           }
           href={`/trips/${trip.id}/stays`}
@@ -307,7 +421,11 @@ export default async function TodayPage({
           title="文件票据入口"
         />
         <QuickLink
-          description="查看路线规划和候选交通方案"
+          description={
+            todayTransports[0]
+              ? `${todayTransports[0].fromName} → ${todayTransports[0].toName}`
+              : "查看路线规划和候选交通方案"
+          }
           href={`/trips/${trip.id}/routes`}
           title="交通方案入口"
         />
@@ -321,19 +439,19 @@ export default async function TodayPage({
   );
 }
 
-function TodayInfo({
+function InfoTile({
   label,
   value,
 }: {
   label: string;
-  value: string | null;
+  value: string | null | undefined;
 }) {
   return (
-    <div className="rounded-md border border-[#e0d9cc] bg-[#fbfaf7] px-3 py-2">
-      <dt className="text-xs text-[#7a858c]">{label}</dt>
-      <dd className="mt-1 font-semibold text-[#34434c]">
+    <div className="rounded-lg border border-[#d8d2c6] bg-white p-4 shadow-sm">
+      <p className="text-xs font-medium text-[#7a858c]">{label}</p>
+      <p className="mt-1 break-words font-semibold text-[#34434c]">
         {formatEmptyValue(value)}
-      </dd>
+      </p>
     </div>
   );
 }
@@ -358,38 +476,45 @@ function QuickLink({
   );
 }
 
-function StatusButton({
-  itemId,
-  label,
-  status,
-  tripId,
-}: {
-  itemId: string;
-  label: string;
-  status: "DONE" | "SKIPPED";
-  tripId: string;
-}) {
-  const action = updateItineraryItemStatusAction.bind(
-    null,
-    tripId,
-    itemId,
-    status,
-    "today",
-  );
-
+function ReadOnlyNotice() {
   return (
-    <form action={action}>
-      <SubmitButton
-        className={[
-          "w-full rounded-md border px-3 py-2.5 text-sm font-semibold transition sm:w-auto",
-          status === "DONE"
-            ? "border-[#2f6f73] text-[#2f6f73] hover:bg-[#edf4f1]"
-            : "border-[#d49a42] text-[#7a4b12] hover:bg-[#fff8ec]",
-        ].join(" ")}
-        pendingLabel="处理中..."
-      >
-        {label}
-      </SubmitButton>
-    </form>
+    <p
+      className="mt-3 rounded-md border border-[#e0d9cc] bg-[#fbfaf7] px-3 py-2 text-sm text-[#5d6972]"
+      data-testid="today-readonly-notice"
+    >
+      你当前只有查看权限，无法修改今日行程或新增记录。
+    </p>
   );
+}
+
+function statusTone(
+  status: ItineraryItemStatus,
+): "muted" | "neutral" | "success" | "warning" {
+  if (status === "DONE") {
+    return "success";
+  }
+  if (status === "SKIPPED" || status === "DELAYED") {
+    return "warning";
+  }
+  return "muted";
+}
+
+function isDateCovered(
+  date: Date,
+  startDate: Date | null,
+  endDate: Date | null,
+): boolean {
+  if (!startDate && !endDate) {
+    return false;
+  }
+
+  const target = toDateKey(date);
+  const start = startDate ? toDateKey(startDate) : target;
+  const end = endDate ? toDateKey(endDate) : target;
+
+  return target >= start && target <= end;
+}
+
+function formatList(values: string[]): string | null {
+  return values.length > 0 ? values.join(" / ") : null;
 }

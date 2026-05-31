@@ -177,12 +177,39 @@
             .filter(Boolean)
             .join(" / ");
         });
+        if (summary.today.nextStep) {
+          todayItems.unshift(
+            [
+              "下一步",
+              text(summary.today.nextStep.startTime),
+              summary.today.nextStep.title,
+              summary.today.nextStep.transportToNext,
+            ]
+              .filter(Boolean)
+              .join(" / "),
+          );
+        }
         var lodging = (summary.lodging || []).map(function (item) {
           return [item.name, item.address, item.phone].filter(Boolean).join(" / ");
         });
         var checklist = (summary.checklist || []).map(function (item) {
           return [item.category, item.title, item.status].filter(Boolean).join(" / ");
         });
+        var budget = [];
+        if (summary.budget && summary.budget.totalBudget) {
+          budget.push(
+            ["总预算", summary.budget.baseCurrency, summary.budget.totalBudget]
+              .filter(Boolean)
+              .join(" / "),
+          );
+        }
+        if (summary.budget && summary.budget.spentToday) {
+          budget = budget.concat(
+            summary.budget.spentToday.map(function (item) {
+              return [item.title, item.currency, item.amount].filter(Boolean).join(" / ");
+            }),
+          );
+        }
         var places = (summary.places || []).map(function (item) {
           return [item.name, item.address, item.phone].filter(Boolean).join(" / ");
         });
@@ -200,6 +227,7 @@
           list("今日行程", todayItems) +
           list("住宿摘要", lodging) +
           list("准备清单", checklist) +
+          list("今日预算", budget) +
           list("地点与紧急备注", places.concat(summary.emergencyNotes || []));
       })();
     </script>

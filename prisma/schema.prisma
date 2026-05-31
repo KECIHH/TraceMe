@@ -120,6 +120,7 @@ enum ItineraryItemStatus {
   PLANNED
   DONE
   SKIPPED
+  DELAYED
 }
 
 enum FoodStatus {

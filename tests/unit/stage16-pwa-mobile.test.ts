@@ -4,6 +4,7 @@ import {
   attachOfflineCacheMetadata,
   buildOfflineCacheVersion,
   formatOfflineLocalTime,
+  OFFLINE_CACHE_SCHEMA_VERSION,
   isValidChineseResidentId,
   isSensitiveDocumentType,
   redactSensitiveOfflineText,
@@ -132,17 +133,23 @@ function minimalOfflineSummary(): Omit<
   "cacheVersion" | "generatedAt"
 > {
   return {
+    budget: {
+      baseCurrency: "CNY",
+      spentToday: [],
+      totalBudget: null,
+    },
     checklist: [],
     dateRange: { endDate: "2026-06-02", startDate: "2026-06-01" },
     emergencyNotes: [],
     lodging: [],
     places: [],
-    schemaVersion: 1,
+    schemaVersion: OFFLINE_CACHE_SCHEMA_VERSION,
     title: "杭州旅行",
     today: {
       city: "杭州",
       date: "2026-06-01",
       items: [],
+      nextStep: null,
       theme: null,
       weatherSummary: null,
     },

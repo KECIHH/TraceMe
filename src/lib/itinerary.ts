@@ -63,6 +63,7 @@ export const ITINERARY_STATUS_OPTIONS: Array<{
   { value: "PLANNED", label: "计划中" },
   { value: "DONE", label: "已完成" },
   { value: "SKIPPED", label: "已跳过" },
+  { value: "DELAYED", label: "已延后" },
 ];
 
 export function getItineraryItemTypeLabel(type: ItineraryItemType): string {

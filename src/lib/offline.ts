@@ -9,7 +9,7 @@ import type {
   Priority,
 } from "@prisma/client";
 
-export const OFFLINE_CACHE_SCHEMA_VERSION = 1;
+export const OFFLINE_CACHE_SCHEMA_VERSION = 2;
 
 const SENSITIVE_DOCUMENT_TYPES: readonly DocumentType[] = [
   "PASSPORT",
@@ -58,6 +58,16 @@ export type OfflinePlaceSummary = {
 };
 
 export type OfflineTripSummary = {
+  budget: {
+    baseCurrency: string;
+    spentToday: Array<{
+      amount: string;
+      category: string;
+      currency: string;
+      title: string;
+    }>;
+    totalBudget: string | null;
+  };
   cacheVersion: string;
   checklist: OfflineChecklistItem[];
   dateRange: {
@@ -74,6 +84,13 @@ export type OfflineTripSummary = {
     city: string | null;
     date: string | null;
     items: OfflineItineraryItem[];
+    nextStep: {
+      reason: "delayed" | "next-timed" | "remaining";
+      startTime: string | null;
+      title: string;
+      transportToNext: string | null;
+      type: ItineraryItemType;
+    } | null;
     theme: string | null;
     weatherSummary: string | null;
   };

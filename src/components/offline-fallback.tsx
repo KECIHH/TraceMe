@@ -58,6 +58,22 @@ export function OfflineFallback() {
       </div>
 
       <OfflineSection title="今日行程">
+        {summary.today.nextStep ? (
+          <div
+            className="mb-3 rounded-md border border-[#b8d8ca] bg-[#f0faf5] p-4"
+            data-testid="offline-next-step"
+          >
+            <p className="text-xs font-semibold text-[#2f6f73]">下一步</p>
+            <h2 className="mt-1 text-lg font-semibold">
+              {summary.today.nextStep.title}
+            </h2>
+            <p className="mt-1 text-sm text-[#5d6972]">
+              {[summary.today.nextStep.startTime, summary.today.nextStep.transportToNext]
+                .filter(Boolean)
+                .join(" / ")}
+            </p>
+          </div>
+        ) : null}
         {summary.today.items.length > 0 ? (
           <div className="space-y-3">
             {summary.today.items.map((item, index) => (
@@ -95,6 +111,19 @@ export function OfflineFallback() {
           items={summary.checklist.map(
             (item) => `${item.category} / ${item.title} / ${item.status}`,
           )}
+        />
+      </OfflineSection>
+
+      <OfflineSection title="今日预算">
+        <SummaryList
+          items={[
+            summary.budget.totalBudget
+              ? `总预算 / ${summary.budget.baseCurrency} ${summary.budget.totalBudget}`
+              : "",
+            ...summary.budget.spentToday.map(
+              (item) => `${item.title} / ${item.currency} ${item.amount}`,
+            ),
+          ].filter(Boolean)}
         />
       </OfflineSection>
 
