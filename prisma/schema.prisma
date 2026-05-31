@@ -157,6 +157,15 @@ enum AiDraftStatus {
   dismissed
 }
 
+enum TripReviewStatus {
+  draft
+  final
+}
+
+enum TravelPreferenceVisibility {
+  private
+}
+
 model User {
   id           String    @id @default(cuid())
   username     String    @unique
@@ -167,6 +176,8 @@ model User {
   auditLogs    AuditLog[]
   importJobs   ImportJob[]
   createdAiPlanDrafts AiPlanDraft[] @relation("AiPlanDraftCreator")
+  tripReviews TripReview[] @relation("TripReviewCreator")
+  travelPreferences TravelPreference[] @relation("TravelPreferenceUser")
   tripMemberships TripMember[] @relation("TripMemberUser")
   invitedTripMembers TripMember[] @relation("TripMemberInviter")
   createdShareLinks TripShareLink[] @relation("TripShareLinkCreator")
@@ -214,6 +225,7 @@ model Trip {
   aiConversations AiConversation[]
   aiPlanDrafts    AiPlanDraft[]
   aiDrafts         AiDraft[]
+  tripReviews      TripReview[]
   importJobs       ImportJob[]
   members          TripMember[]
   shareLinks       TripShareLink[]
@@ -646,6 +658,58 @@ model AiDraft {
   @@index([type])
   @@index([status])
   @@index([createdAt])
+}
+
+model TripReview {
+  id                 String           @id @default(cuid())
+  tripId             String
+  createdById        String
+  status             TripReviewStatus @default(draft)
+  summary            String?
+  recommendations    Json?
+  warnings           Json?
+  actualCostAmount   Decimal?
+  actualCostCurrency String           @default("CNY")
+  actualPace         String?
+  regrets            Json?
+  nextTimeAdvice     String?
+  placeTags          Json?
+  stayTags           Json?
+  transportTags      Json?
+  aiDraftJson        Json?
+  nextTripSuggestions Json?
+  trip               Trip             @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  createdBy          User             @relation("TripReviewCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  extractedPreferences TravelPreference[] @relation("TravelPreferenceSource")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([tripId, createdById])
+  @@index([tripId])
+  @@index([createdById])
+  @@index([status])
+  @@index([updatedAt])
+}
+
+model TravelPreference {
+  id             String                     @id @default(cuid())
+  userId         String
+  key            String
+  label          String
+  weight         Int                        @default(1)
+  evidenceCount  Int                        @default(1)
+  visibility     TravelPreferenceVisibility @default(private)
+  sourceReviewId String?
+  user           User                       @relation("TravelPreferenceUser", fields: [userId], references: [id], onDelete: Cascade)
+  sourceReview   TripReview?                @relation("TravelPreferenceSource", fields: [sourceReviewId], references: [id], onDelete: SetNull)
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([visibility])
+  @@index([sourceReviewId])
+  @@index([updatedAt])
 }
 
 model AppSetting {

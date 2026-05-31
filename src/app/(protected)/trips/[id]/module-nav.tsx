@@ -16,6 +16,7 @@ const moduleLinks = [
   { href: "export", label: "导出" },
   { href: "ai", label: "AI 助手" },
   { href: "notes", label: "笔记" },
+  { href: "review", label: "复盘" },
   { href: "checklist", label: "准备清单" },
 ];
 

@@ -51,6 +51,7 @@ export default async function TripDetailPage({
           aiConversations: true,
           places: true,
           routePlans: true,
+          tripReviews: true,
         },
       },
       places: { select: { type: true } },
@@ -261,6 +262,11 @@ export default async function TripDetailPage({
             count={trip._count.notes}
             href={`/trips/${trip.id}/notes`}
             label="攻略笔记"
+          />
+          <ModuleLink
+            count={trip._count.tripReviews}
+            href={`/trips/${trip.id}/review`}
+            label="旅行复盘"
           />
           <ModuleLink
             count={trip._count.checklistItems}

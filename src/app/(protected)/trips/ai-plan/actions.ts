@@ -20,6 +20,7 @@ import {
   type AiPlanInput,
 } from "@/lib/ai-plan";
 import { prisma } from "@/lib/prisma";
+import { summarizePreferencesForAiPlan } from "@/lib/trip-review";
 
 import type { AiPlanActionState } from "./action-state";
 
@@ -43,7 +44,10 @@ export async function createAiPlanDraftAction(
   let draftId: string;
 
   try {
-    const result = await generateAiPlanWorkspace(validation.values);
+    const preferenceSummary = await loadPreferenceSummary(user.id);
+    const result = await generateAiPlanWorkspace(validation.values, process.env, {
+      preferenceSummary,
+    });
     const draft = await prisma.aiPlanDraft.create({
       data: {
         createdById: user.id,
@@ -138,7 +142,10 @@ export async function regenerateAiPlanDraftAction(draftId: string) {
   }
 
   try {
-    const result = await generateAiPlanWorkspace(validation.values);
+    const preferenceSummary = await loadPreferenceSummary(user.id);
+    const result = await generateAiPlanWorkspace(validation.values, process.env, {
+      preferenceSummary,
+    });
     const previousWorkspace = coerceAiPlanWorkspace(draft.draftJson);
     const nextWorkspace = previousWorkspace
       ? appendAiPlanRegenerationVersion(previousWorkspace, result.workspace)
@@ -353,6 +360,22 @@ async function findOwnedAiPlanDraft(draftId: string, userId: string) {
       id: draftId,
     },
   });
+}
+
+async function loadPreferenceSummary(userId: string): Promise<string> {
+  const preferences = await prisma.travelPreference.findMany({
+    orderBy: [{ weight: "desc" }, { evidenceCount: "desc" }, { updatedAt: "desc" }],
+    select: {
+      evidenceCount: true,
+      key: true,
+      label: true,
+      weight: true,
+    },
+    take: 8,
+    where: { userId, visibility: "private" },
+  });
+
+  return summarizePreferencesForAiPlan(preferences);
 }
 
 function redirectToAiPlan(

@@ -45,6 +45,10 @@ export type AiPlanValidationResult =
   | { errors: Partial<Record<keyof AiPlanInput | "sensitive", string>>; ok: false; values: AiPlanInput }
   | { ok: true; values: AiPlanInput };
 
+export type AiPlanPersonalization = {
+  preferenceSummary?: string;
+};
+
 export type StructuredTripPlan = {
   budget: {
     currency: string;
@@ -375,8 +379,14 @@ export function calculateTripDays(startDate: Date, endDate: Date): number {
   return generateDateRange(startDate, endDate).length;
 }
 
-export function buildStructuredPlanPrompt(input: AiPlanInput): string {
+export function buildStructuredPlanPrompt(
+  input: AiPlanInput,
+  personalization: AiPlanPersonalization = {},
+): string {
   const safeInput = sanitizeAiPlanInput(input);
+  const preferenceSummary = sanitizePreferenceSummary(
+    personalization.preferenceSummary,
+  );
   const dayCount = calculateTripDays(
     parseDateInput(safeInput.startDate) ?? new Date(),
     parseDateInput(safeInput.endDate) ?? new Date(),
@@ -391,25 +401,32 @@ export function buildStructuredPlanPrompt(input: AiPlanInput): string {
     "JSON 顶层字段必须匹配：schemaVersion, trip, destination, itineraryDays, places, transportOptions, checklistItems, categoryBudgets, expenses, notes, budget, verificationChecklist。",
     "枚举只能使用英文值：ItineraryItemType=ATTRACTION/DINING/TRANSPORT/LODGING/SHOPPING/REST/CUSTOM; PlaceType=ATTRACTION/RESTAURANT/HOTEL/STATION/AIRPORT/STORE/HOSPITAL/EMERGENCY/TRANSPORT/SHOPPING/ACTIVITY/OTHER; Priority=LOW/MEDIUM/HIGH/AVOID; TransportMode=WALK/BIKE/TAXI/BUS/COACH/METRO/TRAIN/FLIGHT/FERRY/CAR/OTHER。",
     "时间使用 HH:mm，日期使用 YYYY-MM-DD，金额使用数字，货币默认 CNY。",
+    preferenceSummary
+      ? `用户个人旅行偏好（来自本人确认的历史复盘，仅作规划约束，不包含敏感文件内容）：${preferenceSummary}`
+      : null,
     "用户输入 JSON：",
     JSON.stringify(safeInput, null, 2),
-  ].join("\n");
+  ]
+    .filter((line): line is string => line !== null)
+    .join("\n");
 }
 
 export async function generateStructuredTripPlan(
   input: AiPlanInput,
   env: Record<string, string | undefined> = process.env,
+  personalization: AiPlanPersonalization = {},
 ): Promise<{
   model: string;
   plan: StructuredTripPlan;
   provider: "mock" | "openai";
 }> {
   const config = getAiProviderConfig(env);
+  const personalizedInput = applyAiPlanPersonalization(input, personalization);
 
   if (!config.configured || config.provider === "mock") {
     return {
       model: "mock-travel-plan",
-      plan: generateMockAiPlan(input),
+      plan: generateMockAiPlan(personalizedInput),
       provider: "mock",
     };
   }
@@ -430,7 +447,7 @@ export async function generateStructuredTripPlan(
       outputSections: [],
       placeholder: "",
     },
-    userPrompt: buildStructuredPlanPrompt(input),
+    userPrompt: buildStructuredPlanPrompt(input, personalization),
   };
   const responseText = await provider.generateText(request);
 
@@ -444,27 +461,36 @@ export async function generateStructuredTripPlan(
 export async function generateAiPlanWorkspace(
   input: AiPlanInput,
   env: Record<string, string | undefined> = process.env,
+  personalization: AiPlanPersonalization = {},
 ): Promise<{
   model: string;
   provider: "mock" | "openai";
   workspace: AiPlanWorkspace;
 }> {
   const config = getAiProviderConfig(env);
+  const personalizedInput = applyAiPlanPersonalization(input, personalization);
 
   if (!config.configured || config.provider === "mock") {
     return {
       model: "mock-travel-plan",
       provider: "mock",
-      workspace: createAiPlanWorkspace(generateMockAiPlanOptions(input), input),
+      workspace: createAiPlanWorkspace(
+        generateMockAiPlanOptions(personalizedInput),
+        personalizedInput,
+      ),
     };
   }
 
-  const safeInput = normalizeAiPlanInput(input);
+  const safeInput = normalizeAiPlanInput(personalizedInput);
   const plans: StructuredTripPlan[] = [];
   let model = config.model;
 
   for (const { input: variantInput, variant } of buildAiPlanVariantInputs(safeInput)) {
-    const result = await generateStructuredTripPlan(variantInput, env);
+    const result = await generateStructuredTripPlan(
+      variantInput,
+      env,
+      personalization,
+    );
     model = result.model;
     plans.push(decoratePlanVariant(result.plan, variant, safeInput));
   }
@@ -496,6 +522,12 @@ export function generateMockAiPlan(values: AiPlanInput): StructuredTripPlan {
   const paceText = input.pace ? paceLabelMap[input.pace] : "适中";
   const preferenceText =
     input.preferences.length > 0 ? input.preferences.join("、") : "城市漫步与当地体验";
+  const stayPreferenceText =
+    input.stayPreferences.length > 0 ? input.stayPreferences.join("、") : "未填写";
+  const transportPreferenceText =
+    input.transportPreferences.length > 0
+      ? input.transportPreferences.join("、")
+      : "未填写";
   const mustVisit = splitFreeText(input.mustVisit);
   const avoidText = input.avoid || "未填写";
 
@@ -556,6 +588,7 @@ export function generateMockAiPlan(values: AiPlanInput): StructuredTripPlan {
           "本计划未接入实时票务、酒店、地图路线或天气 API。",
           "请逐项核验营业时间、门票、预约、交通班次、政策变化和安全风险。",
           `出行偏好：${preferenceText}；节奏：${paceText}；同行人：${input.companions || "未填写"}。`,
+          `住宿偏好：${stayPreferenceText}；交通偏好：${transportPreferenceText}。`,
         ].join("\n"),
         tags: ["AI草稿", "人工核验"],
         title: "AI 旅行计划核验说明",
@@ -572,7 +605,7 @@ export function generateMockAiPlan(values: AiPlanInput): StructuredTripPlan {
     trip: {
       baseCurrency: "CNY",
       budgetAmount: totalBudget,
-      description: `${AI_DRAFT_NOTICE} 以${preferenceText}为主题，${input.homeCity}出发，${dayCount}天${destination}旅行草稿。`,
+      description: `${AI_DRAFT_NOTICE} 以${preferenceText}为主题，${input.homeCity}出发，${dayCount}天${destination}旅行草稿。住宿偏好：${stayPreferenceText}；交通偏好：${transportPreferenceText}。`,
       endDate: input.endDate,
       homeCity: input.homeCity,
       mainDestination: destination,
@@ -901,6 +934,39 @@ export function sanitizeAiPlanInput(input: AiPlanInput): AiPlanInput {
   };
 }
 
+export function applyAiPlanPersonalization(
+  input: AiPlanInput,
+  personalization: AiPlanPersonalization = {},
+): AiPlanInput {
+  const normalized = normalizeAiPlanInput(input);
+  const summary = sanitizePreferenceSummary(personalization.preferenceSummary);
+
+  if (!summary) {
+    return normalized;
+  }
+
+  return normalizeAiPlanInput({
+    ...normalized,
+    pace:
+      summary.includes("喜欢慢节奏") && normalized.pace === "balanced"
+        ? "relaxed"
+        : normalized.pace,
+    preferences: addIfMatched(normalized.preferences, summary, [
+      { label: "慢旅行", pattern: /喜欢慢节奏|轻松|留白/ },
+      { label: "美食", pattern: /偏好美食/ },
+      { label: "历史", pattern: /偏好历史文化/ },
+      { label: "自然", pattern: /偏好自然风景/ },
+    ]),
+    stayPreferences: addIfMatched(normalized.stayPreferences, summary, [
+      { label: "安静", pattern: /安静安全|偏好安静/ },
+      { label: "预算优先", pattern: /预算敏感/ },
+    ]),
+    transportPreferences: addIfMatched(normalized.transportPreferences, summary, [
+      { label: "少换乘", pattern: /不喜欢转场过多|少换乘|少转场/ },
+    ]),
+  });
+}
+
 export function structuredPlanToJson(plan: StructuredTripPlan): Prisma.InputJsonObject {
   return plan as unknown as Prisma.InputJsonObject;
 }
@@ -1140,12 +1206,33 @@ export function inputToPromptText(input: AiPlanInput): string {
   ].join("\n");
 }
 
+function sanitizePreferenceSummary(value: string | undefined): string {
+  return redactSensitivePrompt((value ?? "").replace(/\s+/g, " ").trim()).slice(0, 800);
+}
+
+function addIfMatched(
+  values: string[],
+  summary: string,
+  rules: Array<{ label: string; pattern: RegExp }>,
+): string[] {
+  const next = [...values];
+
+  for (const rule of rules) {
+    if (rule.pattern.test(summary) && !next.includes(rule.label)) {
+      next.push(rule.label);
+    }
+  }
+
+  return next;
+}
+
 function buildMockPlaces(destination: string, input: AiPlanInput): StructuredTripPlan["places"] {
   const mustVisit = splitFreeText(input.mustVisit);
   const attractionNames =
     mustVisit.length > 0
       ? mustVisit.slice(0, 3)
       : [`${destination}代表性景区`, `${destination}老城街区`, `${destination}城市公园`];
+  const stayPreferenceText = input.stayPreferences.join("、");
 
   return [
     ...attractionNames.map((name, index) => ({
@@ -1174,8 +1261,8 @@ function buildMockPlaces(destination: string, input: AiPlanInput): StructuredTri
       name: `${destination}交通便利住宿区域`,
       notes: "不代表酒店实时库存或价格，请在订房平台核验。",
       priority: "MEDIUM",
-      reason: input.stayPreferences.includes("安静")
-        ? "兼顾交通与夜间休息。"
+      reason: stayPreferenceText
+        ? `符合${stayPreferenceText}住宿偏好，兼顾通勤与夜间休息。`
         : "便于连接景点和交通枢纽。",
       tags: ["住宿区域", "需核验"],
       type: "HOTEL",

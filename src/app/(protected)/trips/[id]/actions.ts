@@ -41,6 +41,7 @@ type TripModule =
   | "foods"
   | "notes"
   | "places"
+  | "review"
   | "stays";
 
 export async function createDestinationAction(tripId: string, formData: FormData) {
@@ -1060,6 +1061,7 @@ function revalidateTrip(tripId: string) {
   revalidatePath(`/trips/${tripId}/foods`);
   revalidatePath(`/trips/${tripId}/places`);
   revalidatePath(`/trips/${tripId}/notes`);
+  revalidatePath(`/trips/${tripId}/review`);
   revalidatePath(`/trips/${tripId}/checklist`);
   revalidatePath(`/trips/${tripId}/stays`);
 }
