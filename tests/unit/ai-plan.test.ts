@@ -2,13 +2,24 @@ import { describe, expect, it } from "vitest";
 
 import {
   applyAiPlanDraft,
+  appendAiPlanRegenerationVersion,
+  buildAiPlanChangePreview,
   buildChecklist,
   calculateTripDays,
   defaultAiPlanInput,
+  generateAiPlanWorkspace,
   generateMockAiPlan,
+  getSelectedAiPlanOption,
+  normalizeAiPlanInput,
   parseAiPlanJson,
+  reviseAiPlanWorkspace,
+  rollbackAiPlanWorkspace,
+  sanitizeAiPlanInput,
+  scoreStructuredTripPlan,
+  selectAiPlanOption,
   splitBudget,
   validateAiPlanInput,
+  validateAiPlanWorkspace,
   validateStructuredTripPlan,
   type AiPlanInput,
 } from "@/lib/ai-plan";
@@ -46,6 +57,25 @@ describe("AI plan core", () => {
       expect(result.errors.endDate).toBe("返回日期不能早于出发日期。");
       expect(result.errors.people).toBe("出行人数必须是正整数。");
     }
+  });
+
+  it("normalizes AI planning input before generation", () => {
+    const result = normalizeAiPlanInput({
+      ...validInput,
+      destination: "  成都  ",
+      pace: "fast" as AiPlanInput["pace"],
+      preferences: ["美食", "美食", "不存在"],
+      stayPreferences: ["交通方便", "不存在"],
+      transportPreferences: ["高铁", "少换乘", "飞船"],
+      travelGoal: "  带父母轻松吃逛  ",
+    });
+
+    expect(result.destination).toBe("成都");
+    expect(result.pace).toBe("balanced");
+    expect(result.preferences).toEqual(["美食"]);
+    expect(result.stayPreferences).toEqual(["交通方便"]);
+    expect(result.transportPreferences).toEqual(["高铁", "少换乘"]);
+    expect(result.travelGoal).toBe("带父母轻松吃逛");
   });
 
   it("converts a date range to the correct itinerary day count", () => {
@@ -135,6 +165,138 @@ describe("AI plan core", () => {
     if (!result.ok) {
       expect(result.errors.sensitive).toContain("检测到可能包含敏感信息");
     }
+  });
+
+  it("redacts sensitive information before saving AI input", () => {
+    const sanitized = sanitizeAiPlanInput({
+      ...validInput,
+      mustVisit: "护照：E12345678",
+      travelGoal: "电话：13812345678，订单号 ABCD123456",
+    });
+
+    expect(sanitized.mustVisit).not.toContain("E12345678");
+    expect(sanitized.travelGoal).not.toContain("13812345678");
+    expect(sanitized.travelGoal).not.toContain("ABCD123456");
+    expect(sanitized.mustVisit).toContain("已脱敏");
+    expect(sanitized.travelGoal).toContain("已脱敏");
+  });
+
+  it("scores plan options by budget, ease, route, and family friendliness", () => {
+    const plan = generateMockAiPlan(validInput);
+    const score = scoreStructuredTripPlan(plan, validInput);
+    const overBudgetScore = scoreStructuredTripPlan(
+      {
+        ...plan,
+        budget: {
+          ...plan.budget,
+          totalAmount: Number(validInput.budgetAmount) * 2,
+        },
+        trip: {
+          ...plan.trip,
+          budgetAmount: Number(validInput.budgetAmount) * 2,
+        },
+      },
+      validInput,
+    );
+
+    expect(score.overall).toBeGreaterThan(0);
+    expect(score.overall).toBeLessThanOrEqual(100);
+    expect(score.reasons).toHaveLength(3);
+    expect(overBudgetScore.budgetMatch).toBeLessThan(score.budgetMatch);
+  });
+
+  it("creates comparable AI options with change preview counts", async () => {
+    const result = await generateAiPlanWorkspace(
+      {
+        ...validInput,
+        travelGoal: "带父母轻松吃逛，尽量少排队",
+      },
+      {},
+    );
+
+    const validation = validateAiPlanWorkspace(result.workspace);
+    expect(result.provider).toBe("mock");
+    expect(validation.ok).toBe(true);
+    expect(result.workspace.options).toHaveLength(3);
+    expect(result.workspace.versions).toHaveLength(1);
+
+    const preview = buildAiPlanChangePreview(
+      getSelectedAiPlanOption(result.workspace).plan,
+    );
+    expect(preview.trips).toBe(1);
+    expect(preview.itineraryDays).toBe(3);
+    expect(preview.itineraryItems).toBeGreaterThanOrEqual(6);
+  });
+
+  it("converts the selected AI workspace option into Trip module data", async () => {
+    const { workspace } = await generateAiPlanWorkspace(validInput, {});
+    const targetOption = workspace.options.find(
+      (option) => option.id !== workspace.selectedOptionId,
+    );
+    expect(targetOption).toBeDefined();
+
+    const selectedWorkspace = selectAiPlanOption(workspace, targetOption!.id);
+    const selectedPlan = getSelectedAiPlanOption(selectedWorkspace).plan;
+    const fake = createFakeTransaction();
+
+    const tripId = await applyAiPlanDraft(fake.tx, {
+      draftJson: selectedWorkspace as Parameters<typeof applyAiPlanDraft>[1]["draftJson"],
+      id: "draft-1",
+      inputJson: validInput,
+      status: "draft",
+    });
+
+    expect(tripId).toBe("trip-1");
+    expect(fake.created.trip[0].title).toBe(selectedPlan.trip.title);
+    expect(fake.created.itineraryDay).toHaveLength(selectedPlan.itineraryDays.length);
+    expect(fake.created.note.length).toBeGreaterThanOrEqual(selectedPlan.notes.length);
+    expect(fake.updatedDraft).toMatchObject({ status: "applied", tripId: "trip-1" });
+  });
+
+  it("keeps version history for selection, revision, and rollback", async () => {
+    const { workspace } = await generateAiPlanWorkspace(validInput, {});
+    const targetOption = workspace.options.find(
+      (option) => option.id !== workspace.selectedOptionId,
+    );
+    expect(targetOption).toBeDefined();
+
+    const selected = selectAiPlanOption(workspace, targetOption!.id);
+    const revised = reviseAiPlanWorkspace(
+      selected,
+      "第二天更轻松一点，预算便宜一点，交通少换乘。",
+    );
+    const restored = rollbackAiPlanWorkspace(revised, revised.versions[0].id);
+
+    expect(selected.versions).toHaveLength(2);
+    expect(revised.versions).toHaveLength(3);
+    expect(revised.versions.at(-1)?.changeRequest).toContain("第二天");
+    expect(getSelectedAiPlanOption(revised).plan.trip.title).toContain("已调整");
+    expect(restored.selectedOptionId).toBe(revised.versions[0].optionId);
+    expect(restored.versions).toHaveLength(4);
+  });
+
+  it("preserves version history when a draft is regenerated", async () => {
+    const first = await generateAiPlanWorkspace(validInput, {});
+    const revised = reviseAiPlanWorkspace(
+      first.workspace,
+      "第二天更轻松一点，预算便宜一点。",
+    );
+    const next = await generateAiPlanWorkspace(
+      {
+        ...validInput,
+        travelGoal: "重新生成一个更轻松的版本",
+      },
+      {},
+    );
+
+    const regenerated = appendAiPlanRegenerationVersion(
+      revised,
+      next.workspace,
+    );
+
+    expect(regenerated.versions).toHaveLength(revised.versions.length + 1);
+    expect(regenerated.versions.at(-1)?.changeRequest).toBe("重新生成 AI 方案");
+    expect(regenerated.selectedOptionId).toBe(next.workspace.selectedOptionId);
   });
 
   it("splits a total budget across categories", () => {

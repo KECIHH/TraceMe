@@ -38,6 +38,15 @@ export function AiPlanForm({ action, initialState }: AiPlanFormProps) {
         </p>
       ) : null}
 
+      <Field label="旅行目标">
+        <textarea
+          className={`${inputClassName(errors.travelGoal)} min-h-24 resize-y`}
+          defaultValue={values.travelGoal}
+          name="travelGoal"
+          placeholder="例如：三天带父母轻松吃逛成都，预算别超太多，避开排队过久的安排。"
+        />
+      </Field>
+
       <div className="grid gap-5 md:grid-cols-2">
         <Field label="目的地" error={errors.destination} required>
           <input
@@ -155,7 +164,7 @@ export function AiPlanForm({ action, initialState }: AiPlanFormProps) {
       </div>
 
       <p className="rounded-md border border-[#f0d39b] bg-[#fff9e8] px-4 py-3 text-sm leading-6 text-[#73530f]">
-        AI 将生成结构化草稿，确认前不会写入正式旅行数据。请不要输入身份证、护照、手机号、订单号、API Key 或环境变量等敏感信息。
+        先说需求，再由 AI 生成 2-3 个可比较方案。结果始终是草稿，确认前不会写入正式旅行数据。请不要输入身份证、护照、手机号、订单号、API Key 或环境变量等敏感信息。
       </p>
 
       <div className="flex flex-col-reverse gap-3 border-t border-[#e0d9cc] pt-6 sm:flex-row sm:justify-end">
@@ -241,7 +250,7 @@ function GenerateButton() {
       disabled={pending}
       type="submit"
     >
-      {pending ? "正在生成 AI 草稿..." : "生成 AI 草稿"}
+      {pending ? "正在生成 AI 方案..." : "生成 AI 方案"}
     </button>
   );
 }

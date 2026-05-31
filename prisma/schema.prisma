@@ -165,6 +165,7 @@ model User {
   sessions     Session[]
   auditLogs    AuditLog[]
   importJobs   ImportJob[]
+  createdAiPlanDrafts AiPlanDraft[] @relation("AiPlanDraftCreator")
   tripMemberships TripMember[] @relation("TripMemberUser")
   invitedTripMembers TripMember[] @relation("TripMemberInviter")
   createdShareLinks TripShareLink[] @relation("TripShareLinkCreator")
@@ -610,6 +611,7 @@ model AiConversation {
 model AiPlanDraft {
   id           String            @id @default(cuid())
   tripId       String?
+  createdById  String?
   inputJson    Json
   draftJson    Json?
   provider     String
@@ -617,10 +619,12 @@ model AiPlanDraft {
   status       AiPlanDraftStatus @default(draft)
   errorMessage String?
   trip         Trip?             @relation(fields: [tripId], references: [id], onDelete: SetNull)
+  createdBy    User?             @relation("AiPlanDraftCreator", fields: [createdById], references: [id], onDelete: Cascade)
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
   @@index([tripId])
+  @@index([createdById])
   @@index([status])
   @@index([createdAt])
 }

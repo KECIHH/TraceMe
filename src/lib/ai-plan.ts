@@ -38,6 +38,7 @@ export type AiPlanInput = {
   startDate: string;
   stayPreferences: string[];
   transportPreferences: string[];
+  travelGoal: string;
 };
 
 export type AiPlanValidationResult =
@@ -112,6 +113,7 @@ export type StructuredTripPlan = {
     type: PlaceType;
   }>;
   schemaVersion: number;
+  riskReminders?: string[];
   transportOptions: Array<{
     estimatedCost?: number;
     estimatedMinutes?: number;
@@ -135,6 +137,58 @@ export type StructuredTripPlan = {
   verificationChecklist: string[];
 };
 
+export type AiPlanScore = {
+  budgetMatch: number;
+  ease: number;
+  familyElderFriendly: number;
+  overall: number;
+  reasons: string[];
+  routeRationality: number;
+};
+
+export type AiPlanOption = {
+  createdAt: string;
+  id: string;
+  plan: StructuredTripPlan;
+  score: AiPlanScore;
+  summary: string;
+  title: string;
+  tradeoffs: string[];
+};
+
+export type AiPlanVersion = {
+  changeRequest?: string;
+  createdAt: string;
+  id: string;
+  option?: AiPlanOption;
+  optionId: string;
+  score: AiPlanScore;
+  summary: string;
+  title: string;
+};
+
+export type AiPlanWorkspace = {
+  kind: "ai-plan-workspace";
+  options: AiPlanOption[];
+  schemaVersion: 2;
+  selectedOptionId: string;
+  versions: AiPlanVersion[];
+};
+
+export type AiPlanChangePreview = {
+  categoryBudgets: number;
+  checklistItems: number;
+  destinations: number;
+  expenses: number;
+  itineraryDays: number;
+  itineraryItems: number;
+  notes: number;
+  places: number;
+  routePlans: number;
+  transportOptions: number;
+  trips: number;
+};
+
 export const defaultAiPlanInput: AiPlanInput = {
   avoid: "",
   budgetAmount: "",
@@ -149,6 +203,7 @@ export const defaultAiPlanInput: AiPlanInput = {
   startDate: "",
   stayPreferences: [],
   transportPreferences: [],
+  travelGoal: "",
 };
 
 export const AI_PLAN_PREFERENCE_OPTIONS = [
@@ -235,6 +290,7 @@ export function formDataToAiPlanInput(formData: FormData): AiPlanInput {
     startDate: formValue(formData, "startDate"),
     stayPreferences: formData.getAll("stayPreferences").map(String),
     transportPreferences: formData.getAll("transportPreferences").map(String),
+    travelGoal: formValue(formData, "travelGoal"),
   };
 }
 
@@ -311,6 +367,7 @@ export function normalizeAiPlanInput(values: AiPlanInput): AiPlanInput {
       values.transportPreferences,
       AI_PLAN_TRANSPORT_OPTIONS,
     ),
+    travelGoal: values.travelGoal.trim(),
   };
 }
 
@@ -381,6 +438,41 @@ export async function generateStructuredTripPlan(
     model: config.model,
     plan: parseAiPlanJson(responseText),
     provider: "openai",
+  };
+}
+
+export async function generateAiPlanWorkspace(
+  input: AiPlanInput,
+  env: Record<string, string | undefined> = process.env,
+): Promise<{
+  model: string;
+  provider: "mock" | "openai";
+  workspace: AiPlanWorkspace;
+}> {
+  const config = getAiProviderConfig(env);
+
+  if (!config.configured || config.provider === "mock") {
+    return {
+      model: "mock-travel-plan",
+      provider: "mock",
+      workspace: createAiPlanWorkspace(generateMockAiPlanOptions(input), input),
+    };
+  }
+
+  const safeInput = normalizeAiPlanInput(input);
+  const plans: StructuredTripPlan[] = [];
+  let model = config.model;
+
+  for (const { input: variantInput, variant } of buildAiPlanVariantInputs(safeInput)) {
+    const result = await generateStructuredTripPlan(variantInput, env);
+    model = result.model;
+    plans.push(decoratePlanVariant(result.plan, variant, safeInput));
+  }
+
+  return {
+    model,
+    provider: "openai",
+    workspace: createAiPlanWorkspace(plans, safeInput),
   };
 }
 
@@ -470,6 +562,11 @@ export function generateMockAiPlan(values: AiPlanInput): StructuredTripPlan {
       },
     ],
     places,
+    riskReminders: [
+      "交通耗时、班次和价格需以官方渠道为准。",
+      "景点、餐厅、场馆的开放时间、预约和门票政策需出发前核验。",
+      "住宿库存、签证证件、天气和当地政策均不由 AI 实时确认。",
+    ],
     schemaVersion: AI_PLAN_SCHEMA_VERSION,
     transportOptions: buildMockTransportOptions(input),
     trip: {
@@ -612,6 +709,187 @@ export function validateStructuredTripPlan(
   return errors.length > 0 ? { errors, ok: false } : { ok: true, plan };
 }
 
+export function validateAiPlanWorkspace(
+  value: unknown,
+): { errors: string[]; ok: false } | { ok: true; workspace: AiPlanWorkspace } {
+  const workspace = coerceAiPlanWorkspace(value);
+  if (!workspace) {
+    return { errors: ["AI 方案工作区结构无效"], ok: false };
+  }
+
+  const errors: string[] = [];
+
+  if (workspace.options.length < 1) {
+    errors.push("至少需要 1 个 AI 方案");
+  }
+
+  if (!workspace.options.some((option) => option.id === workspace.selectedOptionId)) {
+    errors.push("未选择可写入的 AI 方案");
+  }
+
+  for (const [index, option] of workspace.options.entries()) {
+    const validation = validateStructuredTripPlan(option.plan);
+    if (!validation.ok) {
+      errors.push(`方案 ${index + 1} 结构无效：${validation.errors.join("；")}`);
+    }
+  }
+
+  return errors.length > 0 ? { errors, ok: false } : { ok: true, workspace };
+}
+
+export function coerceAiPlanWorkspace(value: unknown): AiPlanWorkspace | null {
+  if (isAiPlanWorkspace(value)) {
+    const options = value.options.map((option) => normalizeAiPlanOption(option));
+    const versions = value.versions.filter(isAiPlanVersion);
+    const selectedOptionId = options.some(
+      (option) => option.id === value.selectedOptionId,
+    )
+      ? value.selectedOptionId
+      : (options[0]?.id ?? "");
+
+    return {
+      ...value,
+      options,
+      selectedOptionId,
+      versions,
+    };
+  }
+
+  const validation = validateStructuredTripPlan(value);
+  if (!validation.ok) {
+    return null;
+  }
+
+  return createAiPlanWorkspace([validation.plan], defaultAiPlanInput);
+}
+
+export function getSelectedAiPlanOption(
+  workspace: AiPlanWorkspace,
+): AiPlanOption {
+  return (
+    workspace.options.find((option) => option.id === workspace.selectedOptionId) ??
+    workspace.options[0]
+  );
+}
+
+export function selectAiPlanOption(
+  workspace: AiPlanWorkspace,
+  optionId: string,
+): AiPlanWorkspace {
+  if (!workspace.options.some((option) => option.id === optionId)) {
+    throw new Error("选择的 AI 方案不存在。");
+  }
+
+  const selected = workspace.options.find((option) => option.id === optionId);
+
+  return {
+    ...workspace,
+    selectedOptionId: optionId,
+    versions: selected ? appendAiPlanVersion(workspace.versions, selected) : workspace.versions,
+  };
+}
+
+export function reviseAiPlanWorkspace(
+  workspace: AiPlanWorkspace,
+  changeRequest: string,
+): AiPlanWorkspace {
+  const request = changeRequest.trim();
+  if (!request) {
+    throw new Error("请输入要调整的内容。");
+  }
+
+  if (findSensitivePromptLabels(request).length > 0) {
+    throw new Error(AI_PLAN_SENSITIVE_MESSAGE);
+  }
+
+  const selected = getSelectedAiPlanOption(workspace);
+  const plan = applyLocalPlanRevision(selected.plan, request);
+  const revised: AiPlanOption = normalizeAiPlanOption({
+    ...selected,
+    createdAt: new Date().toISOString(),
+    plan,
+    score: scoreStructuredTripPlan(plan),
+    summary: buildPlanSummary(plan),
+    title: plan.trip.title,
+    tradeoffs: buildPlanTradeoffs(plan),
+  });
+
+  return {
+    ...workspace,
+    options: workspace.options.map((option) =>
+      option.id === selected.id ? revised : option,
+    ),
+    versions: appendAiPlanVersion(workspace.versions, revised, request),
+  };
+}
+
+export function rollbackAiPlanWorkspace(
+  workspace: AiPlanWorkspace,
+  versionId: string,
+): AiPlanWorkspace {
+  const version = workspace.versions.find((item) => item.id === versionId);
+  if (!version) {
+    throw new Error("选择的历史版本不存在。");
+  }
+
+  const snapshot = version.option ? normalizeAiPlanOption(version.option) : null;
+
+  return {
+    ...workspace,
+    options: snapshot
+      ? workspace.options.map((option) =>
+          option.id === snapshot.id ? snapshot : option,
+        )
+      : workspace.options,
+    selectedOptionId: version.optionId,
+    versions: snapshot
+      ? appendAiPlanVersion(workspace.versions, snapshot, "回滚到历史版本")
+      : workspace.versions,
+  };
+}
+
+export function buildAiPlanChangePreview(
+  plan: StructuredTripPlan,
+): AiPlanChangePreview {
+  return {
+    categoryBudgets: dedupeCategoryBudgets(plan.categoryBudgets).length,
+    checklistItems: plan.checklistItems.length,
+    destinations: 1,
+    expenses: plan.expenses.length,
+    itineraryDays: plan.itineraryDays.length,
+    itineraryItems: plan.itineraryDays.reduce(
+      (total, day) => total + day.items.length,
+      0,
+    ),
+    notes: plan.notes.length + 1,
+    places: plan.places.length,
+    routePlans: 1,
+    transportOptions: plan.transportOptions.length,
+    trips: 1,
+  };
+}
+
+export function aiPlanWorkspaceToJson(
+  workspace: AiPlanWorkspace,
+): Prisma.InputJsonObject {
+  return workspace as unknown as Prisma.InputJsonObject;
+}
+
+export function appendAiPlanRegenerationVersion(
+  previousWorkspace: AiPlanWorkspace,
+  nextWorkspace: AiPlanWorkspace,
+  changeRequest = "重新生成 AI 方案",
+): AiPlanWorkspace {
+  return {
+    ...nextWorkspace,
+    versions: appendAiPlanVersion(
+      previousWorkspace.versions,
+      getSelectedAiPlanOption(nextWorkspace),
+      changeRequest,
+    ),
+  };
+}
+
 export function sanitizeAiPlanInput(input: AiPlanInput): AiPlanInput {
   const normalized = normalizeAiPlanInput(input);
   return {
@@ -619,6 +897,7 @@ export function sanitizeAiPlanInput(input: AiPlanInput): AiPlanInput {
     avoid: redactSensitivePrompt(normalized.avoid),
     companions: redactSensitivePrompt(normalized.companions),
     mustVisit: redactSensitivePrompt(normalized.mustVisit),
+    travelGoal: redactSensitivePrompt(normalized.travelGoal),
   };
 }
 
@@ -639,12 +918,12 @@ export async function applyAiPlanDraft(
     throw new Error("该 AI 草稿已处理，不能重复写入。");
   }
 
-  const validation = validateStructuredTripPlan(draft.draftJson);
+  const validation = validateAiPlanWorkspace(draft.draftJson);
   if (!validation.ok) {
     throw new Error(`AI 草稿结构无效：${validation.errors.join("；")}`);
   }
 
-  const plan = validation.plan;
+  const plan = getSelectedAiPlanOption(validation.workspace).plan;
   const startDate = parseDateInput(plan.trip.startDate);
   const endDate = parseDateInput(plan.trip.endDate);
 
@@ -847,6 +1126,7 @@ export async function applyAiPlanDraft(
 
 export function inputToPromptText(input: AiPlanInput): string {
   return [
+    input.travelGoal,
     input.destination,
     input.homeCity,
     input.people,
@@ -1113,6 +1393,447 @@ export function splitBudget(totalAmount: number): Array<{ amount: number; catego
     allocated = roundMoney(allocated + amount);
     return { amount, category };
   });
+}
+
+function generateMockAiPlanOptions(values: AiPlanInput): StructuredTripPlan[] {
+  const input = normalizeAiPlanInput(values);
+
+  return buildAiPlanVariantInputs(input).map(({ input: variantInput, variant }) =>
+    decoratePlanVariant(generateMockAiPlan(variantInput), variant, input),
+  );
+}
+
+function buildAiPlanVariantInputs(input: AiPlanInput): Array<{
+  input: AiPlanInput;
+  variant: "balanced" | "efficient" | "relaxed";
+}> {
+  const normalized = normalizeAiPlanInput(input);
+
+  return [
+    {
+      input: {
+        ...normalized,
+        pace: normalized.pace || "balanced",
+      },
+      variant: "balanced",
+    },
+    {
+      input: {
+        ...normalized,
+        pace: "relaxed",
+        preferences: Array.from(new Set([...normalized.preferences, "慢旅行"])),
+      },
+      variant: "relaxed",
+    },
+    {
+      input: {
+        ...normalized,
+        pace: "packed",
+        transportPreferences: Array.from(
+          new Set([...normalized.transportPreferences, "少换乘"]),
+        ),
+      },
+      variant: "efficient",
+    },
+  ];
+}
+
+function createAiPlanWorkspace(
+  plans: StructuredTripPlan[],
+  input: AiPlanInput,
+): AiPlanWorkspace {
+  const options = plans.slice(0, 3).map((plan, index) =>
+    normalizeAiPlanOption({
+      createdAt: new Date(Date.now() + index).toISOString(),
+      id: `option-${index + 1}`,
+      plan,
+      score: scoreStructuredTripPlan(plan, input),
+      summary: buildPlanSummary(plan),
+      title: plan.trip.title,
+      tradeoffs: buildPlanTradeoffs(plan),
+    }),
+  );
+  const selected = chooseDefaultOption(options);
+
+  return {
+    kind: "ai-plan-workspace",
+    options,
+    schemaVersion: 2,
+    selectedOptionId: selected.id,
+    versions: appendAiPlanVersion([], selected),
+  };
+}
+
+function chooseDefaultOption(options: AiPlanOption[]): AiPlanOption {
+  return options.reduce((best, option) =>
+    option.score.overall > best.score.overall ? option : best,
+  );
+}
+
+export function scoreStructuredTripPlan(
+  plan: StructuredTripPlan,
+  input: AiPlanInput = defaultAiPlanInput,
+): AiPlanScore {
+  const totalItems = plan.itineraryDays.reduce(
+    (total, day) => total + day.items.length,
+    0,
+  );
+  const averageItems = totalItems / Math.max(plan.itineraryDays.length, 1);
+  const restItems = plan.itineraryDays.reduce(
+    (total, day) =>
+      total + day.items.filter((item) => item.type === "REST").length,
+    0,
+  );
+  const transferPenalty = plan.transportOptions.reduce(
+    (total, option) => total + (option.transferCount ?? 0),
+    0,
+  );
+  const budgetTarget = Number(input.budgetAmount || plan.trip.budgetAmount || 0);
+  const estimatedBudget = Number(plan.budget.totalAmount || plan.trip.budgetAmount || 0);
+  const budgetDiff =
+    budgetTarget > 0 ? Math.abs(estimatedBudget - budgetTarget) / budgetTarget : 0.08;
+  const hasFamilyNeed =
+    input.companions.includes("儿童") ||
+    input.companions.includes("老人") ||
+    input.preferences.includes("亲子");
+
+  const ease = clampScore(
+    100 - Math.max(0, averageItems - 2) * 18 + restItems * 6 - transferPenalty * 4,
+  );
+  const budgetMatch = clampScore(100 - budgetDiff * 120);
+  const routeRationality = clampScore(
+    88 - transferPenalty * 8 + plan.transportOptions.length * 2,
+  );
+  const familyElderFriendly = clampScore(
+    hasFamilyNeed
+      ? 74 + restItems * 8 - Math.max(0, averageItems - 3) * 12
+      : 82 + restItems * 3 - Math.max(0, averageItems - 3.5) * 8,
+  );
+  const overall = Math.round(
+    ease * 0.3 +
+      budgetMatch * 0.25 +
+      routeRationality * 0.25 +
+      familyElderFriendly * 0.2,
+  );
+
+  return {
+    budgetMatch,
+    ease,
+    familyElderFriendly,
+    overall,
+    reasons: [
+      `每日平均 ${averageItems.toFixed(1)} 个安排，轻松度 ${ease}。`,
+      budgetTarget > 0
+        ? `预算估算与目标预算偏差约 ${Math.round(budgetDiff * 100)}%。`
+        : "未填写预算，按目的地和人数生成粗略估算。",
+      `交通建议 ${plan.transportOptions.length} 项，换乘风险需人工核验。`,
+    ],
+    routeRationality,
+  };
+}
+
+function decoratePlanVariant(
+  plan: StructuredTripPlan,
+  variant: "balanced" | "efficient" | "relaxed",
+  input: AiPlanInput,
+): StructuredTripPlan {
+  const labels = {
+    balanced: {
+      note: "均衡方案：兼顾核心地点、预算和体力。",
+      suffix: "均衡方案",
+      theme: "均衡",
+    },
+    efficient: {
+      note: "效率方案：更集中覆盖必去地点，请额外关注体力和交通余量。",
+      suffix: "效率方案",
+      theme: "高效",
+    },
+    relaxed: {
+      note: "轻松方案：减少每日安排，给亲子、老人或慢旅行保留余量。",
+      suffix: "轻松方案",
+      theme: "轻松",
+    },
+  }[variant];
+  const suffix = `${labels.theme} / ${plan.trip.theme}`;
+  const title = `${plan.trip.mainDestination}${plan.itineraryDays.length}日 AI ${labels.suffix}`;
+
+  return {
+    ...plan,
+    itineraryDays: plan.itineraryDays.map((day) => ({
+      ...day,
+      notes: `${day.notes}\n${labels.note}`,
+    })),
+    notes: [
+      ...plan.notes,
+      {
+        content: [
+          AI_DRAFT_NOTICE,
+          labels.note,
+          input.travelGoal ? `旅行目标：${input.travelGoal}` : "旅行目标：未填写。",
+        ].join("\n"),
+        tags: ["AI草稿", labels.suffix],
+        title: `方案定位：${labels.suffix}`,
+      },
+    ],
+    riskReminders: Array.from(
+      new Set([
+        ...(plan.riskReminders ?? []),
+        "不得将本方案视为实时票价、营业时间、签证政策或库存确认。",
+      ]),
+    ),
+    trip: {
+      ...plan.trip,
+      description: `${plan.trip.description}\n${labels.note}`,
+      theme: suffix,
+      title,
+    },
+  };
+}
+
+function applyLocalPlanRevision(
+  plan: StructuredTripPlan,
+  changeRequest: string,
+): StructuredTripPlan {
+  const lowered = changeRequest.toLowerCase();
+  const wantsRelaxed =
+    changeRequest.includes("轻松") ||
+    changeRequest.includes("少走") ||
+    changeRequest.includes("老人") ||
+    changeRequest.includes("亲子") ||
+    lowered.includes("relax");
+  const wantsBudget =
+    changeRequest.includes("预算") ||
+    changeRequest.includes("省钱") ||
+    changeRequest.includes("便宜") ||
+    lowered.includes("budget");
+  const wantsTransport =
+    changeRequest.includes("少换乘") ||
+    changeRequest.includes("交通") ||
+    changeRequest.includes("自驾") ||
+    lowered.includes("transport");
+
+  let next: StructuredTripPlan = {
+    ...plan,
+    categoryBudgets: plan.categoryBudgets.map((item) => ({ ...item })),
+    checklistItems: plan.checklistItems.map((item) => ({ ...item })),
+    expenses: plan.expenses.map((item) => ({ ...item })),
+    itineraryDays: plan.itineraryDays.map((day) => ({
+      ...day,
+      items: day.items.map((item) => ({ ...item })),
+    })),
+    notes: plan.notes.map((note) => ({ ...note, tags: [...note.tags] })),
+    places: plan.places.map((place) => ({ ...place, tags: [...place.tags] })),
+    riskReminders: [...(plan.riskReminders ?? [])],
+    transportOptions: plan.transportOptions.map((item) => ({ ...item })),
+    verificationChecklist: [...plan.verificationChecklist],
+  };
+
+  if (wantsRelaxed) {
+    next = {
+      ...next,
+      itineraryDays: next.itineraryDays.map((day) => ({
+        ...day,
+        items: day.items.slice(0, Math.max(2, Math.min(day.items.length, 3))),
+        notes: `${day.notes}\n已按追问调整：减少密集安排，保留休息和弹性时间。`,
+      })),
+      trip: {
+        ...next.trip,
+        theme: `轻松调整 / ${next.trip.theme}`,
+      },
+    };
+  }
+
+  if (wantsBudget) {
+    const budgetAmount = roundMoney((next.trip.budgetAmount ?? next.budget.totalAmount) * 0.9);
+    next = {
+      ...next,
+      budget: {
+        ...next.budget,
+        notes: `${next.budget.notes}\n已按追问压低预算目标，仍需以实际价格核验。`,
+        totalAmount: budgetAmount,
+      },
+      categoryBudgets: splitBudget(budgetAmount).map((item) => ({
+        ...item,
+        notes: "按追问调整后的 AI 预算建议，非实时价格。",
+      })),
+      expenses: splitBudget(budgetAmount).map((item) => ({
+        amount: item.amount,
+        category: item.category,
+        currency: "CNY",
+        notes: "按追问调整后的 AI 估算项，不代表实际支出。",
+        title: `AI 估算：${item.category}`,
+      })),
+      trip: {
+        ...next.trip,
+        budgetAmount,
+      },
+    };
+  }
+
+  if (wantsTransport) {
+    next = {
+      ...next,
+      transportOptions: next.transportOptions.map((option) => ({
+        ...option,
+        notes: `${option.notes}\n已按追问优先少换乘/更稳妥交通，需用官方渠道核验实时路线。`,
+        transferCount: Math.max((option.transferCount ?? 0) - 1, 0),
+      })),
+    };
+  }
+
+  const revisionNote = {
+    content: [
+      AI_DRAFT_NOTICE,
+      `本版本根据追问调整：${redactSensitivePrompt(changeRequest)}`,
+      "调整为草稿层修改，正式 Trip 数据仍需在变更预览后确认写入。",
+    ].join("\n"),
+    tags: ["AI草稿", "追问修改"],
+    title: `追问修改 - ${formatDate(new Date())}`,
+  };
+
+  return {
+    ...next,
+    notes: [...next.notes, revisionNote],
+    trip: {
+      ...next.trip,
+      description: `${next.trip.description}\n追问调整：${redactSensitivePrompt(changeRequest)}`,
+      title: next.trip.title.includes("已调整")
+        ? next.trip.title
+        : `${next.trip.title}（已调整）`,
+    },
+    verificationChecklist: Array.from(
+      new Set([
+        ...next.verificationChecklist,
+        "追问修改后的路线、预算和时间仍需重新人工核验。",
+      ]),
+    ),
+  };
+}
+
+function normalizeAiPlanOption(option: AiPlanOption): AiPlanOption {
+  return {
+    ...option,
+    score: normalizeAiPlanScore(option.score),
+    summary: option.summary || buildPlanSummary(option.plan),
+    title: option.title || option.plan.trip.title,
+    tradeoffs: option.tradeoffs?.length
+      ? option.tradeoffs
+      : buildPlanTradeoffs(option.plan),
+  };
+}
+
+function normalizeAiPlanScore(score: AiPlanScore): AiPlanScore {
+  return {
+    budgetMatch: clampScore(score.budgetMatch),
+    ease: clampScore(score.ease),
+    familyElderFriendly: clampScore(score.familyElderFriendly),
+    overall: clampScore(score.overall),
+    reasons: Array.isArray(score.reasons) ? score.reasons : [],
+    routeRationality: clampScore(score.routeRationality),
+  };
+}
+
+function appendAiPlanVersion(
+  versions: AiPlanVersion[],
+  option: AiPlanOption,
+  changeRequest?: string,
+): AiPlanVersion[] {
+  const snapshot = normalizeAiPlanOption(option);
+  const version: AiPlanVersion = {
+    createdAt: new Date().toISOString(),
+    id: `version-${versions.length + 1}`,
+    option: snapshot,
+    optionId: snapshot.id,
+    score: snapshot.score,
+    summary: snapshot.summary,
+    title: snapshot.title,
+  };
+
+  if (changeRequest) {
+    version.changeRequest = redactSensitivePrompt(changeRequest);
+  }
+
+  return [...versions, version];
+}
+
+function buildPlanSummary(plan: StructuredTripPlan): string {
+  const days = plan.itineraryDays.length;
+  const itemCount = plan.itineraryDays.reduce(
+    (total, day) => total + day.items.length,
+    0,
+  );
+
+  return [
+    `${plan.trip.homeCity} 出发，${days} 天 ${plan.trip.mainDestination}`,
+    `每日平均 ${(itemCount / Math.max(days, 1)).toFixed(1)} 个安排`,
+    `预算估算 ${plan.budget.currency} ${Math.round(plan.budget.totalAmount).toLocaleString("zh-CN")}`,
+  ].join(" · ");
+}
+
+function buildPlanTradeoffs(plan: StructuredTripPlan): string[] {
+  const averageItems =
+    plan.itineraryDays.reduce((total, day) => total + day.items.length, 0) /
+    Math.max(plan.itineraryDays.length, 1);
+  const tradeoffs = [
+    averageItems > 3
+      ? "覆盖更多地点，但体力和交通缓冲较紧。"
+      : "节奏留有余量，但可能需要舍弃部分备选地点。",
+    plan.budget.isRoughEstimate
+      ? "预算为粗略估算，价格需重新核验。"
+      : "预算按用户目标拆分，仍不代表实时价格。",
+    "交通、营业时间、票价、政策均需官方渠道确认。",
+  ];
+
+  return tradeoffs;
+}
+
+function isAiPlanWorkspace(value: unknown): value is AiPlanWorkspace {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    value.kind === "ai-plan-workspace" &&
+    value.schemaVersion === 2 &&
+    typeof value.selectedOptionId === "string" &&
+    Array.isArray(value.options) &&
+    value.options.every(isAiPlanOption) &&
+    Array.isArray(value.versions)
+  );
+}
+
+function isAiPlanOption(value: unknown): value is AiPlanOption {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    Array.isArray(value.tradeoffs) &&
+    isRecord(value.score) &&
+    validateStructuredTripPlan(value.plan).ok
+  );
+}
+
+function isAiPlanVersion(value: unknown): value is AiPlanVersion {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.optionId === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    isRecord(value.score) &&
+    (value.option === undefined || isAiPlanOption(value.option))
+  );
+}
+
+function clampScore(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(value)));
 }
 
 function dedupeCategoryBudgets(

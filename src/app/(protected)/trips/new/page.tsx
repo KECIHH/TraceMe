@@ -11,16 +11,16 @@ export default function NewTripPage() {
         <p className="text-sm font-semibold text-[#2f6f73]">New Trip</p>
         <h1 className="mt-2 text-3xl font-semibold">创建旅行计划</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#5d6972]">
-          默认使用 AI 生成结构化旅行草稿。确认前不会写入正式数据；确认后可在行程、地点、预算、清单等模块继续编辑。
+          默认推荐先说需求，再由 AI 生成可比较、可修改、可确认的旅行计划。确认前不会写入正式数据；确认后可在行程、地点、预算、清单等模块继续编辑。
         </p>
       </div>
 
       <section className="rounded-lg border border-[#d8d2c6] bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">AI 生成旅行计划</h2>
+            <h2 className="text-xl font-semibold">AI 主导创建旅行计划</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5d6972]">
-              只需填写目的地、出发城市和日期，AI 会生成 Trip、Destination、Place、Itinerary、Checklist、Budget、Route 和 Note 草稿供你预览。
+              填写旅行目标、人数、预算、天数、偏好、禁忌和节奏后，AI 会生成 2-3 个方案。选择并调整草稿后，再预览写入 Trip、Destination、Place、Itinerary、Checklist、Budget、Route 和 Note 的变更。
             </p>
           </div>
           <Link

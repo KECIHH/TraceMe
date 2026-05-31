@@ -5,12 +5,17 @@ import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth/session";
 import {
+  aiPlanWorkspaceToJson,
+  appendAiPlanRegenerationVersion,
   applyAiPlanDraft,
+  coerceAiPlanWorkspace,
   formDataToAiPlanInput,
-  generateStructuredTripPlan,
+  generateAiPlanWorkspace,
   normalizeAiPlanInput,
+  reviseAiPlanWorkspace,
+  rollbackAiPlanWorkspace,
   sanitizeAiPlanInput,
-  structuredPlanToJson,
+  selectAiPlanOption,
   validateAiPlanInput,
   type AiPlanInput,
 } from "@/lib/ai-plan";
@@ -22,7 +27,7 @@ export async function createAiPlanDraftAction(
   _previousState: AiPlanActionState,
   formData: FormData,
 ): Promise<AiPlanActionState> {
-  await requireUser();
+  const user = await requireUser();
 
   const values = formDataToAiPlanInput(formData);
   const validation = validateAiPlanInput(values);
@@ -38,10 +43,11 @@ export async function createAiPlanDraftAction(
   let draftId: string;
 
   try {
-    const result = await generateStructuredTripPlan(validation.values);
+    const result = await generateAiPlanWorkspace(validation.values);
     const draft = await prisma.aiPlanDraft.create({
       data: {
-        draftJson: structuredPlanToJson(result.plan),
+        createdById: user.id,
+        draftJson: aiPlanWorkspaceToJson(result.workspace),
         inputJson: sanitizeAiPlanInput(validation.values),
         model: result.model,
         provider: result.provider,
@@ -62,18 +68,16 @@ export async function createAiPlanDraftAction(
   }
 
   revalidatePath("/trips/ai-plan");
-  redirect(`/trips/ai-plan?draftId=${draftId}`);
+  redirectToAiPlan({ draftId });
 }
 
 export async function applyAiPlanDraftAction(draftId: string) {
   const user = await requireUser();
 
-  const draft = await prisma.aiPlanDraft.findUnique({
-    where: { id: draftId },
-  });
+  const draft = await findOwnedAiPlanDraft(draftId, user.id);
 
   if (!draft) {
-    redirect("/trips/ai-plan?error=草稿不存在或已被删除");
+    redirectToAiPlan({ error: "草稿不存在或已被删除" });
   }
 
   let tripId: string;
@@ -111,35 +115,38 @@ export async function applyAiPlanDraftAction(draftId: string) {
       },
       where: { id: draftId },
     });
-    redirect(`/trips/ai-plan?draftId=${draftId}&error=草稿写入失败，请重新生成`);
+    redirectToAiPlan({ draftId, error: "草稿写入失败，请重新生成" });
   }
 
   redirect(`/trips/${tripId}`);
 }
 
 export async function regenerateAiPlanDraftAction(draftId: string) {
-  await requireUser();
+  const user = await requireUser();
 
-  const draft = await prisma.aiPlanDraft.findUnique({
-    where: { id: draftId },
-  });
+  const draft = await findOwnedAiPlanDraft(draftId, user.id);
 
   if (!draft) {
-    redirect("/trips/ai-plan?error=草稿不存在或已被删除");
+    redirectToAiPlan({ error: "草稿不存在或已被删除" });
   }
 
   const values = jsonToAiPlanInput(draft.inputJson);
   const validation = validateAiPlanInput(values);
 
   if (!validation.ok) {
-    redirect(`/trips/ai-plan?draftId=${draftId}&edit=1&error=原始输入需要修正`);
+    redirectToAiPlan({ draftId, edit: 1, error: "原始输入需要修正" });
   }
 
   try {
-    const result = await generateStructuredTripPlan(validation.values);
+    const result = await generateAiPlanWorkspace(validation.values);
+    const previousWorkspace = coerceAiPlanWorkspace(draft.draftJson);
+    const nextWorkspace = previousWorkspace
+      ? appendAiPlanRegenerationVersion(previousWorkspace, result.workspace)
+      : result.workspace;
+
     await prisma.aiPlanDraft.update({
       data: {
-        draftJson: structuredPlanToJson(result.plan),
+        draftJson: aiPlanWorkspaceToJson(nextWorkspace),
         errorMessage: null,
         inputJson: sanitizeAiPlanInput(validation.values),
         model: result.model,
@@ -160,19 +167,131 @@ export async function regenerateAiPlanDraftAction(draftId: string) {
   }
 
   revalidatePath("/trips/ai-plan");
-  redirect(`/trips/ai-plan?draftId=${draftId}`);
+  redirectToAiPlan({ draftId });
+}
+
+export async function selectAiPlanOptionAction(
+  draftId: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+
+  const optionId = String(formData.get("optionId") ?? "");
+  const draft = await findOwnedAiPlanDraft(draftId, user.id);
+
+  if (!draft || draft.status !== "draft") {
+    redirectToAiPlan({ error: "草稿不存在或当前不可修改" });
+  }
+
+  const workspace = coerceAiPlanWorkspace(draft.draftJson);
+  if (!workspace) {
+    redirectToAiPlan({ draftId, error: "AI 草稿结构无效" });
+  }
+
+  try {
+    const nextWorkspace = selectAiPlanOption(workspace, optionId);
+    await prisma.aiPlanDraft.update({
+      data: {
+        draftJson: aiPlanWorkspaceToJson(nextWorkspace),
+        errorMessage: null,
+      },
+      where: { id: draftId },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "选择方案失败。";
+    redirectToAiPlan({ draftId, error: message });
+  }
+
+  revalidatePath("/trips/ai-plan");
+  redirectToAiPlan({ draftId, message: "已选择 AI 方案" });
+}
+
+export async function reviseAiPlanDraftAction(
+  draftId: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+
+  const changeRequest = String(formData.get("changeRequest") ?? "");
+  const draft = await findOwnedAiPlanDraft(draftId, user.id);
+
+  if (!draft || draft.status !== "draft") {
+    redirectToAiPlan({ error: "草稿不存在或当前不可修改" });
+  }
+
+  const workspace = coerceAiPlanWorkspace(draft.draftJson);
+  if (!workspace) {
+    redirectToAiPlan({ draftId, error: "AI 草稿结构无效" });
+  }
+
+  try {
+    const nextWorkspace = reviseAiPlanWorkspace(workspace, changeRequest);
+    await prisma.aiPlanDraft.update({
+      data: {
+        draftJson: aiPlanWorkspaceToJson(nextWorkspace),
+        errorMessage: null,
+      },
+      where: { id: draftId },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "调整草稿失败。";
+    redirectToAiPlan({ draftId, error: message });
+  }
+
+  revalidatePath("/trips/ai-plan");
+  redirectToAiPlan({ draftId, message: "AI 草稿已按追问调整" });
+}
+
+export async function rollbackAiPlanDraftAction(
+  draftId: string,
+  formData: FormData,
+) {
+  const user = await requireUser();
+
+  const versionId = String(formData.get("versionId") ?? "");
+  const draft = await findOwnedAiPlanDraft(draftId, user.id);
+
+  if (!draft || draft.status !== "draft") {
+    redirectToAiPlan({ error: "草稿不存在或当前不可修改" });
+  }
+
+  const workspace = coerceAiPlanWorkspace(draft.draftJson);
+  if (!workspace) {
+    redirectToAiPlan({ draftId, error: "AI 草稿结构无效" });
+  }
+
+  try {
+    const nextWorkspace = rollbackAiPlanWorkspace(workspace, versionId);
+    await prisma.aiPlanDraft.update({
+      data: {
+        draftJson: aiPlanWorkspaceToJson(nextWorkspace),
+        errorMessage: null,
+      },
+      where: { id: draftId },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "回滚版本失败。";
+    redirectToAiPlan({ draftId, error: message });
+  }
+
+  revalidatePath("/trips/ai-plan");
+  redirectToAiPlan({ draftId, message: "已回滚到所选 AI 版本" });
 }
 
 export async function discardAiPlanDraftAction(draftId: string) {
-  await requireUser();
+  const user = await requireUser();
 
-  await prisma.aiPlanDraft.update({
+  const result = await prisma.aiPlanDraft.updateMany({
     data: { status: "discarded" },
-    where: { id: draftId },
+    where: { createdById: user.id, id: draftId },
   });
 
+  if (result.count === 0) {
+    redirectToAiPlan({ error: "草稿不存在或当前不可修改" });
+  }
+
   revalidatePath("/trips/ai-plan");
-  redirect("/trips/ai-plan?message=AI 草稿已丢弃");
+  redirectToAiPlan({ message: "AI 草稿已丢弃" });
 }
 
 function jsonToAiPlanInput(value: unknown): AiPlanInput {
@@ -191,6 +310,7 @@ function jsonToAiPlanInput(value: unknown): AiPlanInput {
       startDate: "",
       stayPreferences: [],
       transportPreferences: [],
+      travelGoal: "",
     });
   }
 
@@ -208,6 +328,7 @@ function jsonToAiPlanInput(value: unknown): AiPlanInput {
     startDate: stringValue(value.startDate),
     stayPreferences: stringArray(value.stayPreferences),
     transportPreferences: stringArray(value.transportPreferences),
+    travelGoal: stringValue(value.travelGoal),
   });
 }
 
@@ -223,4 +344,28 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+async function findOwnedAiPlanDraft(draftId: string, userId: string) {
+  return prisma.aiPlanDraft.findFirst({
+    where: {
+      createdById: userId,
+      id: draftId,
+    },
+  });
+}
+
+function redirectToAiPlan(
+  params: Record<string, boolean | number | string | null | undefined> = {},
+): never {
+  const searchParams = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined && value !== "") {
+      searchParams.set(key, String(value));
+    }
+  }
+
+  const query = searchParams.toString();
+  redirect(query ? `/trips/ai-plan?${query}` : "/trips/ai-plan");
 }
