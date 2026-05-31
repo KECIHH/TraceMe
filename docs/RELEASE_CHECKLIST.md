@@ -1,4 +1,4 @@
-# Release Checklist
+# 发布检查清单
 
 发布前逐项确认：
 
@@ -6,8 +6,8 @@
 - [ ] `npm run lint` 通过。
 - [ ] `npm run typecheck` 通过。
 - [ ] `npm run test` 通过。
-- [ ] `npm run test:e2e` 通过。
 - [ ] `npm run build` 通过。
+- [ ] `npm run test:e2e` 通过。
 - [ ] `docker compose build` 通过。
 - [ ] migration 已执行或已确认容器启动时执行成功。
 - [ ] 管理员账号已设置强密码。
@@ -42,7 +42,8 @@
 
 - 公众注册
 - 公开社区
-- 公开分享
+- 默认公开旅行
+- 绕过密码、过期、撤销和敏感内容过滤的分享
 - 在线支付
 - 搜索引擎收录
 
